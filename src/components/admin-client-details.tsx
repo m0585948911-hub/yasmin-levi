@@ -1521,7 +1521,9 @@ const FamilyManagementDialog = ({
                             </div>
                         </ScrollArea>
                     ) : (
-                        <p className="text-sm text-center text-muted-foreground py-4">אין כרגע בני משפחה מקושרים.</p>
+                        <p className="text-sm text-center text-muted-foreground py-4">
+                            אין כרגע בני משפחה מקושרים.
+                        </p>
                     )}
                     <AddFamilyMemberDialog onAdd={handleAddMember} isChecking={isCheckingPhone} />
                 </div>
@@ -2090,19 +2092,19 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                                 </Button>
                               </div>
                           </div>
-                          <CardDescription>
+                          <CardDescription className="text-right">
                               מסמכים שנשלחו ללקוח למילוי או חתימה.
                           </CardDescription>
                       </CardHeader>
                       <CardContent>
                            {pendingClientForms.length > 0 && (
                             <>
-                              <h3 className="font-semibold mb-2">ממתין למילוי על ידי הלקוח</h3>
+                              <h3 className="font-semibold mb-2 text-right">ממתין למילוי על ידי הלקוח</h3>
                                <ul className="space-y-2">
                                   {pendingClientForms.map((form) => (
-                                      <li key={form.instanceId} className="flex justify-between items-center text-sm p-3 border rounded-md bg-yellow-50 border-yellow-200">
+                                      <li key={form.instanceId} className="flex items-center text-sm p-3 border rounded-md bg-yellow-50 border-yellow-200">
                                           <p>{form.templateName}</p>
-                                           <div className="flex items-center gap-2">
+                                           <div className="flex items-center gap-2 ml-auto">
                                                 <p className="text-xs text-yellow-700">נשלח בתאריך {format(new Date(form.assignedAt), 'dd.MM.yy')}</p>
                                                 <AlertDialog>
                                                     <AlertDialogTrigger asChild>
@@ -2136,14 +2138,14 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                           {uploadedDocs.length > 0 && (
                               <ul className="space-y-2">
                                   {uploadedDocs.map((doc) => (
-                                      <li key={doc.id} className="flex items-center justify-between p-3 border rounded-md bg-accent/50">
-                                          <div>
+                                      <li key={doc.id} className="flex items-center p-3 border rounded-md bg-accent/50">
+                                          <div className="text-right">
                                               <p className="font-semibold">{doc.name}</p>
                                               <p className="text-sm text-muted-foreground">
                                                   סטטוס: {doc.status === 'pending_signature' ? 'ממתין לחתימה' : 'נחתם'}
                                               </p>
                                           </div>
-                                          <div className="flex items-center gap-1">
+                                          <div className="flex items-center gap-1 ml-auto">
                                               <Button variant="ghost" size="icon" onClick={() => window.open(doc.dataUrl, '_blank')}>
                                                   <Eye className="h-4 w-4 text-blue-600"/>
                                               </Button>
@@ -2174,12 +2176,12 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                            {signedForms.length > 0 && (
                             <>
                               <Separator className="my-4" />
-                              <h3 className="font-semibold mb-2">טפסים חתומים</h3>
+                              <h3 className="font-semibold mb-2 text-right">טפסים חתומים</h3>
                                <ul className="space-y-2">
                                   {signedForms.map((form) => (
-                                      <li key={form.instanceId} className="flex justify-between items-center text-sm p-3 border rounded-md bg-accent/50">
+                                      <li key={form.instanceId} className="flex items-center text-sm p-3 border rounded-md bg-accent/50">
                                           <p>{form.templateName}</p>
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 ml-auto">
                                               <Badge className="bg-green-100 text-green-800">
                                                   חתום ({form.signatureDetails?.signedAt ? format(new Date(form.signatureDetails.signedAt), 'dd.MM.yy') : ''})
                                               </Badge>
