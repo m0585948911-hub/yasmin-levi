@@ -28,6 +28,7 @@ import {
   Printer,
   FileSignature,
   Download,
+  MessageSquare,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -72,6 +73,13 @@ interface ClientImage {
     date: string; // ISO string
     instanceId?: string; // for form/summary images
     manualId?: string; // for manual images
+}
+
+interface CommunicationLog {
+  id: string;
+  timestamp: string; // ISO string
+  type: 'phone' | 'sms' | 'whatsapp' | 'email' | 'other';
+  summary: string;
 }
 
 
@@ -1656,6 +1664,86 @@ const FamilyManagementDialog = ({
     );
 };
 
+const CommunicationLogDialog = ({
+    isOpen,
+    onOpenChange,
+    onSave,
+    logToEdit,
+}: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSave: (log: Omit<CommunicationLog, 'id'>) => void;
+    logToEdit: CommunicationLog | null;
+}) => {
+    const [type, setType] = useState<CommunicationLog['type']>('phone');
+    const [summary, setSummary] = useState('');
+    const [timestamp, setTimestamp] = useState(new Date());
+
+    useEffect(() => {
+        if (logToEdit) {
+            setType(logToEdit.type);
+            setSummary(logToEdit.summary);
+            setTimestamp(new Date(logToEdit.timestamp));
+        } else {
+            setType('phone');
+            setSummary('');
+            setTimestamp(new Date());
+        }
+    }, [logToEdit, isOpen]);
+
+    const handleSave = () => {
+        if (!summary.trim()) {
+            alert('יש למלא את סיכום השיחה.');
+            return;
+        }
+        onSave({
+            timestamp: timestamp.toISOString(),
+            type,
+            summary,
+        });
+        onOpenChange(false);
+    };
+    
+    return (
+         <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{logToEdit ? 'עריכת רישום תקשורת' : 'רישום שיחה חדשה'}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label>תאריך ושעה</Label>
+                        <Input type="datetime-local" value={format(timestamp, "yyyy-MM-dd'T'HH:mm")} onChange={(e) => setTimestamp(new Date(e.target.value))} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>ערוץ תקשורת</Label>
+                        <Select value={type} onValueChange={(v) => setType(v as CommunicationLog['type'])}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="בחר ערוץ..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="phone">שיחת טלפון</SelectItem>
+                                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                                <SelectItem value="sms">SMS</SelectItem>
+                                <SelectItem value="email">אימייל</SelectItem>
+                                <SelectItem value="other">אחר</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="space-y-2">
+                        <Label>סיכום</Label>
+                        <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="סכם את תוכן השיחה או ההודעה..." rows={5} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+                    <Button onClick={handleSave}>שמור רישום</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 export function AdminClientDetails({ initialClient }: { initialClient: Client }) {
   const { user } = useAdminUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1684,6 +1772,10 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
 
   const [manualImages, setManualImages] = useState<any[]>([]);
   const [viewingImage, setViewingImage] = useState<ClientImage | null>(null);
+
+  const [communicationLogs, setCommunicationLogs] = useState<CommunicationLog[]>([]);
+  const [isCommLogDialogOpen, setIsCommLogDialogOpen] = useState(false);
+  const [editingCommLog, setEditingCommLog] = useState<CommunicationLog | null>(null);
 
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -1743,6 +1835,10 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
 
     const manual = getFromLocalStorage<any[]>(`client_manual_images_${clientId}`, []);
     setManualImages(manual);
+    
+    const commLogs = getFromLocalStorage<CommunicationLog[]>(`client_comm_logs_${clientId}`, []);
+    setCommunicationLogs(commLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+
 
     setIsLoading(false);
   };
@@ -1927,6 +2023,41 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     }
   };
 
+  const handleSaveCommLog = (logData: Omit<CommunicationLog, 'id'>) => {
+        let updatedLogs;
+        if (editingCommLog) {
+            // Update
+            updatedLogs = communicationLogs.map(log => 
+                log.id === editingCommLog.id ? { ...editingCommLog, ...logData } : log
+            );
+        } else {
+            // Create
+            const newLog: CommunicationLog = {
+                id: crypto.randomUUID(),
+                ...logData
+            };
+            updatedLogs = [newLog, ...communicationLogs];
+        }
+        
+        setCommunicationLogs(updatedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+        setInLocalStorage(`client_comm_logs_${client.id}`, updatedLogs);
+        
+        toast({ title: 'הצלחה', description: 'רישום התקשורת נשמר.' });
+        setEditingCommLog(null);
+  };
+  
+  const handleDeleteCommLog = (logId: string) => {
+    const updatedLogs = communicationLogs.filter(log => log.id !== logId);
+    setCommunicationLogs(updatedLogs);
+    setInLocalStorage(`client_comm_logs_${client.id}`, updatedLogs);
+    toast({ title: 'הצלחה', description: 'הרישום נמחק.' });
+  };
+  
+  const handleOpenCommLogDialog = (log: CommunicationLog | null) => {
+      setEditingCommLog(log);
+      setIsCommLogDialogOpen(true);
+  }
+
   const sortedAllAppointments = allClientAppointments.slice().sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
   
   const allPastAppointments = sortedAllAppointments.filter(app => new Date(app.start) < new Date());
@@ -2033,6 +2164,17 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
       </div>
     );
   }
+
+  const getCommLogIcon = (type: CommunicationLog['type']) => {
+        switch (type) {
+            case 'phone': return <Phone className="h-4 w-4 text-blue-500" />;
+            case 'sms': return <MessageSquare className="h-4 w-4 text-orange-500" />;
+            case 'whatsapp': return <MessageSquare className="h-4 w-4 text-green-500" />;
+            case 'email': return <Mail className="h-4 w-4 text-red-500" />;
+            default: return <MessageSquare className="h-4 w-4 text-gray-500" />;
+        }
+    };
+
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 pb-20">
@@ -2462,7 +2604,63 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             </Card>
           </TabsContent>
           <TabsContent value="communication" className="mt-4">
-              <Card><CardContent className="p-8 text-center text-muted-foreground">התכתבות עם הלקוח/ה תופיע כאן.</CardContent></Card>
+               <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>יומן תקשורת</CardTitle>
+                    <Button onClick={() => handleOpenCommLogDialog(null)}>
+                      <PlusCircle className="mr-2" />
+                      רישום שיחה חדשה
+                    </Button>
+                  </div>
+                  <CardDescription>
+                    תיעוד כל האינטראקציות והתקשורת עם הלקוח/ה.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {communicationLogs.length > 0 ? (
+                    <div className="space-y-4">
+                      {communicationLogs.map((log) => (
+                        <div key={log.id} className="flex items-start gap-4 border-b pb-4 last:border-b-0">
+                          <div className="flex-shrink-0 pt-1">{getCommLogIcon(log.type)}</div>
+                          <div className="flex-grow">
+                             <div className="flex justify-between items-baseline">
+                                <p className="text-sm font-semibold">
+                                  {format(new Date(log.timestamp), "d MMM yyyy, HH:mm", { locale: he })}
+                                </p>
+                                <div className="flex items-center gap-1">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenCommLogDialog(log)}>
+                                        <Pencil className="h-4 w-4 text-primary" />
+                                    </Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader><AlertDialogTitle>למחוק רישום?</AlertDialogTitle></AlertDialogHeader>
+                                            <AlertDialogDescription>פעולה זו היא סופית.</AlertDialogDescription>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>ביטול</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => handleDeleteCommLog(log.id)}>מחק</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </div>
+                             </div>
+                            <p className="mt-1 text-sm whitespace-pre-wrap">{log.summary}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-16">
+                      אין רישומי תקשורת עבור לקוח/ה זה.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
           </TabsContent>
         </Tabs>
 
@@ -2592,6 +2790,12 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             image={viewingImage}
             onClose={() => setViewingImage(null)}
             onDelete={handleDeleteManualImage}
+        />
+        <CommunicationLogDialog
+            isOpen={isCommLogDialogOpen}
+            onOpenChange={setIsCommLogDialogOpen}
+            onSave={handleSaveCommLog}
+            logToEdit={editingCommLog}
         />
     </div>
   );
