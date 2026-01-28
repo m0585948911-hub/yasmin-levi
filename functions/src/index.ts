@@ -1,4 +1,5 @@
 
+
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { format } from "date-fns";
@@ -421,3 +422,45 @@ export const onNotificationCreated = functions.firestore
 
         functions.logger.info(`Finished sending notification "${title}" to all clients.`);
     });
+
+
+export const sendCommunicationReminders = functions.pubsub.schedule('every 1 minutes').onRun(async (context) => {
+    functions.logger.info("Running communication reminder job.");
+    const now = admin.firestore.Timestamp.now();
+    
+    const q = db.collection('reminders')
+        .where('status', '==', 'pending')
+        .where('notificationTime', '<=', now);
+
+    const querySnapshot = await q.get();
+
+    if (querySnapshot.empty) {
+        functions.logger.info("No due reminders found.");
+        return null;
+    }
+
+    const batch = db.batch();
+
+    for (const doc of querySnapshot.docs) {
+        const reminder = doc.data() as any; 
+        
+        const title = `תזכורת: ${reminder.clientName}`;
+        const body = reminder.summary;
+        
+        functions.logger.info(`Sending reminder for client ${reminder.clientName} to user ${reminder.userId}`);
+
+        await sendPushNotification(
+            reminder.userId,
+            'users',
+            title,
+            body,
+            { route: `/admin/clients/${reminder.clientId}` }
+        );
+
+        batch.update(doc.ref, { status: 'sent' });
+    }
+
+    await batch.commit();
+    functions.logger.info(`Processed ${querySnapshot.size} reminders.`);
+    return null;
+});

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -65,6 +66,9 @@ import { db } from '@/lib/firebase';
 import { getFormTemplates, deleteFormInstance, type TreatmentFormTemplate, type FormField, type FilledFormInstance, type SignatureDetails } from '@/lib/form-templates';
 import { BirthDateSelector } from './birth-date-selector';
 import { SignaturePad } from './signature-pad';
+import { User, getUsers } from '@/lib/users';
+import { createReminder } from '@/lib/reminders';
+
 
 interface ClientImage {
     src: string;
@@ -80,6 +84,8 @@ interface CommunicationLog {
   timestamp: string; // ISO string
   type: 'phone' | 'sms' | 'whatsapp' | 'email' | 'other';
   summary: string;
+  reminderAt?: string | null;
+  reminderForUserId?: string | null;
 }
 
 
@@ -1669,25 +1675,36 @@ const CommunicationLogDialog = ({
     onOpenChange,
     onSave,
     logToEdit,
+    adminUsers
 }: {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (log: Omit<CommunicationLog, 'id'>) => void;
     logToEdit: CommunicationLog | null;
+    adminUsers: User[];
 }) => {
     const [type, setType] = useState<CommunicationLog['type']>('phone');
     const [summary, setSummary] = useState('');
     const [timestamp, setTimestamp] = useState(new Date());
+    const [addReminder, setAddReminder] = useState(false);
+    const [reminderAt, setReminderAt] = useState('');
+    const [reminderForUserId, setReminderForUserId] = useState('');
 
     useEffect(() => {
         if (logToEdit) {
             setType(logToEdit.type);
             setSummary(logToEdit.summary);
             setTimestamp(new Date(logToEdit.timestamp));
+            setAddReminder(!!logToEdit.reminderAt);
+            setReminderAt(logToEdit.reminderAt ? format(new Date(logToEdit.reminderAt), "yyyy-MM-dd'T'HH:mm") : '');
+            setReminderForUserId(logToEdit.reminderForUserId || '');
         } else {
             setType('phone');
             setSummary('');
             setTimestamp(new Date());
+            setAddReminder(false);
+            setReminderAt('');
+            setReminderForUserId('');
         }
     }, [logToEdit, isOpen]);
 
@@ -1696,10 +1713,16 @@ const CommunicationLogDialog = ({
             alert('יש למלא את סיכום השיחה.');
             return;
         }
+        if (addReminder && (!reminderAt || !reminderForUserId)) {
+            alert('כדי להוסיף תזכורת, יש למלא תאריך, שעה, ולבחור מנהל.');
+            return;
+        }
         onSave({
             timestamp: timestamp.toISOString(),
             type,
             summary,
+            reminderAt: addReminder ? new Date(reminderAt).toISOString() : null,
+            reminderForUserId: addReminder ? reminderForUserId : null,
         });
         onOpenChange(false);
     };
@@ -1734,6 +1757,34 @@ const CommunicationLogDialog = ({
                         <Label>סיכום</Label>
                         <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="סכם את תוכן השיחה או ההודעה..." rows={5} />
                     </div>
+                    <Separator />
+                     <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <Switch id="add-reminder-switch" checked={addReminder} onCheckedChange={setAddReminder} />
+                            <Label htmlFor="add-reminder-switch">הוסף תזכורת</Label>
+                        </div>
+                        {addReminder && (
+                            <div className="pl-6 space-y-4 border-r-2 border-primary/50 pr-4">
+                                <div className="space-y-2">
+                                    <Label>תאריך ושעת תזכורת</Label>
+                                    <Input type="datetime-local" value={reminderAt} onChange={e => setReminderAt(e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>תזכורת עבור</Label>
+                                     <Select value={reminderForUserId} onValueChange={setReminderForUserId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="בחר מנהל..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {adminUsers.map(user => (
+                                                <SelectItem key={user.id} value={user.id}>{user.firstName} {user.lastName}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
@@ -1752,6 +1803,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
   const [lastAppointment, setLastAppointment] = useState<Appointment | null>(null);
   const [allClientAppointments, setAllClientAppointments] = useState<Appointment[]>([]);
   const [allClients, setAllClients] = useState<Client[]>([]);
+  const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, startMutation] = useTransition();
   const [isSavingNote, startSavingNote] = useTransition();
@@ -1796,12 +1848,13 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     oneYearInFuture.setFullYear(now.getFullYear() + 1);
 
 
-    const [refreshedClient, allAppointments, fetchedTemplates, allClientsData, formInstancesSnapshot] = await Promise.all([
+    const [refreshedClient, allAppointments, fetchedTemplates, allClientsData, formInstancesSnapshot, fetchedAdminUsers] = await Promise.all([
       getClientById(clientId),
       getAppointments(fiveYearsAgo, oneYearInFuture, businessId, clientId),
       getFormTemplates(),
       getClients(businessId),
-      getDocs(query(collection(db, "formInstances"), where("clientId", "==", clientId)))
+      getDocs(query(collection(db, "formInstances"), where("clientId", "==", clientId))),
+      getUsers(),
     ]);
 
     if (refreshedClient) {
@@ -1820,6 +1873,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     setAllTemplates(fetchedTemplates);
     setSummaryTemplates(fetchedTemplates.filter(t => t.type === 'summary'));
     setAllClients(allClientsData);
+    setAdminUsers(fetchedAdminUsers);
 
     const history = formInstancesSnapshot.docs.map(doc => ({
         ...doc.data(),
@@ -2023,20 +2077,30 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     }
   };
 
-  const handleSaveCommLog = (logData: Omit<CommunicationLog, 'id'>) => {
+  const handleSaveCommLog = async (logData: Omit<CommunicationLog, 'id'>) => {
         let updatedLogs;
+        const logWithId = { ...logData, id: editingCommLog?.id || crypto.randomUUID() };
+
         if (editingCommLog) {
             // Update
             updatedLogs = communicationLogs.map(log => 
-                log.id === editingCommLog.id ? { ...editingCommLog, ...logData } : log
+                log.id === editingCommLog.id ? logWithId : log
             );
         } else {
             // Create
-            const newLog: CommunicationLog = {
-                id: crypto.randomUUID(),
-                ...logData
-            };
-            updatedLogs = [newLog, ...communicationLogs];
+            updatedLogs = [logWithId, ...communicationLogs];
+        }
+        
+        if (logWithId.reminderAt && logWithId.reminderForUserId) {
+            await createReminder({
+                reminderAt: logWithId.reminderAt,
+                userId: logWithId.reminderForUserId,
+                clientId: client.id,
+                clientName: `${client.firstName} ${client.lastName}`,
+                summary: logWithId.summary,
+                commLogId: logWithId.id,
+            });
+            toast({ title: 'תזכורת נוצרה', description: 'התזכורת תשלח למנהל בזמן שנקבע.' });
         }
         
         setCommunicationLogs(updatedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
@@ -2650,6 +2714,12 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                                 </div>
                              </div>
                             <p className="mt-1 text-sm whitespace-pre-wrap">{log.summary}</p>
+                            {log.reminderAt && (
+                                <div className="mt-2 text-xs text-blue-600 bg-blue-50 p-2 rounded-md flex items-center gap-2">
+                                    <Bell className="h-3 w-3" />
+                                    <span>תזכורת ל{adminUsers.find(u => u.id === log.reminderForUserId)?.firstName || 'מנהל'} בתאריך {format(new Date(log.reminderAt), "dd/MM/yy HH:mm")}</span>
+                                </div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -2796,6 +2866,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             onOpenChange={setIsCommLogDialogOpen}
             onSave={handleSaveCommLog}
             logToEdit={editingCommLog}
+            adminUsers={adminUsers}
         />
     </div>
   );
