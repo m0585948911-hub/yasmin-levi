@@ -35,7 +35,8 @@ export const registerPushToken = async (entityId: string, entityType: 'clients' 
         try {
             const app = getApp();
             const messaging = getMessaging(app);
-            const currentToken = await getFCMToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_VAPID_KEY! });
+            // Removed explicit vapidKey to rely on the service worker configuration
+            const currentToken = await getFCMToken(messaging);
             
             if (currentToken) {
                 console.log('Web FCM Token received:', currentToken);

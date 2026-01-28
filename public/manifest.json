@@ -1,21 +1,21 @@
 {
-  "name": "Yasmin Beauty Diary",
-  "short_name": "Yasmin Diary",
-  "description": "ניהול יומן ומעקב לקוחות",
+  "name": "יסמין לוי",
+  "short_name": "יסמין לוי",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F9F7F9",
-  "theme_color": "#D1C4E9",
+  "theme_color": "#F9F7F9",
   "icons": [
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "https://firebasestorage.googleapis.com/v0/b/yasmin-beauty-diary.firebasestorage.app/o/logo%2Flogo%20yasmin%20levi.png?alt=media&token=27516397-70dc-4e30-a674-4174315b0971",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "https://firebasestorage.googleapis.com/v0/b/yasmin-beauty-diary.firebasestorage.app/o/logo%2Flogo%20yasmin%20levi.png?alt=media&token=27516397-70dc-4e30-a674-4174315b0971",
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "gcm_sender_id": "103953800507"
 }
