@@ -15,6 +15,7 @@ export function AdminAppointmentNotifier() {
   const router = useRouter();
   const isInitialLoad = useRef(true);
   const notifiedIds = useRef<Set<string>>(new Set());
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -37,6 +38,7 @@ export function AdminAppointmentNotifier() {
         if (change.type === 'added' && !notifiedIds.current.has(change.doc.id)) {
             const data = change.doc.data();
             const start = (data.start as Timestamp).toDate();
+            audioRef.current?.play().catch(e => console.error("Audio play failed", e));
             toast({
                 title: "בקשת תור חדשה",
                 description: `מאת: ${data.clientName} לתאריך ${format(start, 'dd/MM/yyyy HH:mm', { locale: he })}`,
@@ -59,5 +61,7 @@ export function AdminAppointmentNotifier() {
     return () => unsubscribe();
   }, [toast, router]);
 
-  return null; // This component doesn't render anything itself
+  return (
+    <audio ref={audioRef} src="https://firebasestorage.googleapis.com/v0/b/yasmin-beauty-diary.firebasestorage.app/o/MP3%2Fsound-email-received.mp3?alt=media&token=ba9b57a8-bfa9-4fb0-98a5-6290616479cf" preload="auto" />
+  );
 }
