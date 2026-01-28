@@ -18,12 +18,14 @@ import {
   Briefcase,
   Loader2,
   Bell,
+  BellRing,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { getPendingAppointments } from "@/lib/appointments";
 import { getWaitingListRequests } from "@/lib/waiting-list";
 import { useAdminUser } from "@/hooks/use-admin-user";
 import { getReminders } from "@/lib/reminders";
+import { startOfDay, endOfDay } from 'date-fns';
 
 
 export default function AdminDashboardPage() {
@@ -33,6 +35,7 @@ export default function AdminDashboardPage() {
   const [pendingAppointmentsCount, setPendingAppointmentsCount] = useState(0);
   const [waitingListCount, setWaitingListCount] = useState(0);
   const [pendingRemindersCount, setPendingRemindersCount] = useState(0);
+  const [todayRemindersCount, setTodayRemindersCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
@@ -40,19 +43,25 @@ export default function AdminDashboardPage() {
       if (!user) return;
       setIsLoading(true);
       try {
-        const [pending, waiting, reminders] = await Promise.all([
+        const todayStart = startOfDay(new Date());
+        const todayEnd = endOfDay(new Date());
+
+        const [pending, waiting, reminders, todayReminders] = await Promise.all([
             permissions.canApproveAppointments ? getPendingAppointments() : Promise.resolve([]),
             getWaitingListRequests(),
-            getReminders(['pending'])
+            getReminders(['pending']),
+            getReminders(['pending'], todayStart, todayEnd)
         ]);
         setPendingAppointmentsCount(pending.length);
         setWaitingListCount(waiting.filter(r => r.status === 'new').length);
         setPendingRemindersCount(reminders.length);
+        setTodayRemindersCount(todayReminders.length);
       } catch (error) {
         console.error("Failed to fetch counts", error);
         setPendingAppointmentsCount(0);
         setWaitingListCount(0);
         setPendingRemindersCount(0);
+        setTodayRemindersCount(0);
       } finally {
         setIsLoading(false);
       }
@@ -92,9 +101,17 @@ export default function AdminDashboardPage() {
     { 
       id: 'reminders',
       icon: isLoading ? <Loader2 size={iconSize} className="animate-spin text-primary" /> : <Bell size={iconSize} className="text-primary" />, 
-      label: "תזכורות", 
+      label: "כל התזכורות", 
       href: "/admin/reminders", 
       badgeCount: pendingRemindersCount,
+      requiredPermission: true
+    },
+    { 
+      id: 'today_reminders',
+      icon: isLoading ? <Loader2 size={iconSize} className="animate-spin text-primary" /> : <BellRing size={iconSize} className="text-primary" />, 
+      label: "תזכורות להיום", 
+      href: "/admin/reminders", 
+      badgeCount: todayRemindersCount,
       requiredPermission: true
     },
     { id: 'reports', icon: <BarChart3 size={iconSize} className="text-primary" />, label: "דוחות", href: "/admin/reports", requiredPermission: user.permission === 'owner' },

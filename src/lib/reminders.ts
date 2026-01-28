@@ -1,7 +1,7 @@
 
 'use server';
 
-import { collection, addDoc, Timestamp, getDocs, query, orderBy, doc, updateDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, getDocs, query, orderBy, doc, updateDoc, deleteDoc, where, QueryConstraint } from 'firebase/firestore';
 import { db } from './firebase';
 
 export interface ReminderData {
@@ -59,12 +59,20 @@ export async function createReminder(data: {
     }
 }
 
-export async function getReminders(status?: Reminder['status'][]): Promise<Reminder[]> {
+export async function getReminders(status?: Reminder['status'][], startDate?: Date, endDate?: Date): Promise<Reminder[]> {
     const remindersCol = collection(db, 'reminders');
-    const constraints = [];
+    const constraints: QueryConstraint[] = [];
     if (status && status.length > 0) {
         constraints.push(where('status', 'in', status));
     }
+
+    if (startDate) {
+        constraints.push(where('reminderAt', '>=', Timestamp.fromDate(startDate)));
+    }
+    if (endDate) {
+        constraints.push(where('reminderAt', '<=', Timestamp.fromDate(endDate)));
+    }
+
     constraints.push(orderBy('reminderAt', 'asc'));
 
     const q = query(remindersCol, ...constraints);
