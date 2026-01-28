@@ -1,0 +1,13 @@
+ext {
+    minSdkVersion = 23
+    compileSdkVersion = 34
+    targetSdkVersion = 34
+
+    // ספריות אנדרואיד נפוצות (אפשר להשאיר כפי שהוא)
+    androidxAppCompatVersion = '1.6.1'
+    androidxCoreVersion = '1.12.0'
+    androidxMaterialVersion = '1.10.0'
+    androidxCoordinatorLayoutVersion = '1.2.0'
+    androidxCoreSplashScreenVersion = '1.0.1'
+    androidGradlePluginVersion = '8.4.0'
+}

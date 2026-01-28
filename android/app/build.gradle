@@ -1,0 +1,80 @@
+
+plugins {
+    id 'com.android.application'
+}
+
+apply from: "../variables.gradle"
+
+android {
+    // אפשר להשאיר namespace כללי; ה-applicationId נקבע בפרודקט-פלייבור
+    namespace "com.yasmin.app"
+    compileSdk project.ext.compileSdkVersion
+
+    defaultConfig {
+        // ברירת מחדל – יוחלף בכל טעם (flavor) למטה
+        applicationId "com.yasmin.client"
+        minSdk project.ext.minSdkVersion
+        targetSdk project.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // השאר ריק/הגדרות דיבאג אם צריך
+        }
+    }
+
+    // מוסיפים טעמים (flavors) לשני קבצי התקנה נפרדים
+    flavorDimensions "app"
+
+    productFlavors {
+        client {
+            dimension "app"
+            applicationId "com.yasmin.client"
+            // שם האפליקציה ללקוחות
+            resValue "string", "app_name", "יסמין לוי - לגלות את היופי שבך"
+
+            // דיפ-לינקים (אם תרצה לפתוח קישורים חיצוניים לאפליקציה)
+            manifestPlaceholders = [
+                hostName  : "studio--yasmin-beauty-diary.us-central1.hosted.app",
+                pathPrefix: "/"    // ללקוחות – שורש האתר (שנה אם יש לך נתיב אחר)
+            ]
+        }
+
+        admin {
+            dimension "app"
+            applicationId "com.yasmin.admin"
+            // שם האפליקציה למנהל
+            resValue "string", "app_name", "יסמין לוי ניהול"
+
+            // דיפ-לינק כדי שכתובת /admin/login תפתח את האפליקציה (כשמגיעים מקישור)
+            manifestPlaceholders = [
+                hostName  : "studio--yasmin-beauty-diary.us-central1.hosted.app",
+                pathPrefix: "/admin/login"
+            ]
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "com.google.android.material:material:$androidxMaterialVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:${androidxCoreSplashScreenVersion}"
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    implementation project(':capacitor-android')
+}
