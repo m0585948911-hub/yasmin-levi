@@ -9,6 +9,7 @@ import { AdminAppointmentNotifier } from "@/components/admin-appointment-notifie
 import { AdminUserProvider, useAdminUser } from "@/hooks/use-admin-user";
 import { usePathname } from "next/navigation";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { AdminReminderNotifier } from "@/components/admin-reminder-notifier";
 
 
 function AdminHeader() {
@@ -68,6 +69,7 @@ export default function AdminLayout({
               {children}
           </main>
           {!isLoginPage && <AdminAppointmentNotifier />}
+          {!isLoginPage && <AdminReminderNotifier />}
       </div>
     </AdminUserProvider>
   );

@@ -1,4 +1,3 @@
-
 'use server';
 
 import { collection, addDoc, Timestamp, getDocs, query, orderBy, doc, updateDoc, deleteDoc, where, QueryConstraint } from 'firebase/firestore';
@@ -59,7 +58,7 @@ export async function createReminder(data: {
     }
 }
 
-export async function getReminders(status?: Reminder['status'][], startDate?: Date, endDate?: Date): Promise<Reminder[]> {
+export async function getReminders(status?: Reminder['status'][], startDate?: Date, endDate?: Date, userId?: string): Promise<Reminder[]> {
     const remindersCol = collection(db, 'reminders');
     const constraints: QueryConstraint[] = [];
     if (status && status.length > 0) {
@@ -71,6 +70,9 @@ export async function getReminders(status?: Reminder['status'][], startDate?: Da
     }
     if (endDate) {
         constraints.push(where('reminderAt', '<=', Timestamp.fromDate(endDate)));
+    }
+    if (userId) {
+        constraints.push(where('userId', '==', userId));
     }
 
     constraints.push(orderBy('reminderAt', 'asc'));
@@ -95,6 +97,24 @@ export async function updateReminderStatus(id: string, status: Reminder['status'
         return { success: true };
     } catch (error) {
         console.error("Error updating reminder status:", error);
+        return { success: false };
+    }
+}
+
+export async function updateReminderTime(id: string, newReminderAt: string): Promise<{ success: boolean }> {
+    try {
+        const reminderRef = doc(db, 'reminders', id);
+        const reminderDate = new Date(newReminderAt);
+        const notificationDate = new Date(reminderDate.getTime() - 5 * 60 * 1000); // 5 minutes before
+
+        await updateDoc(reminderRef, {
+            reminderAt: Timestamp.fromDate(reminderDate),
+            notificationTime: Timestamp.fromDate(notificationDate),
+            status: 'pending', // Reset status to pending
+        });
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating reminder time:", error);
         return { success: false };
     }
 }
