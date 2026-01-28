@@ -26,6 +26,8 @@ import type { AllSettings } from "@/lib/settings-types";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogContent } from "./ui/dialog";
 import { Textarea } from "./ui/textarea";
 import { createWaitingListRequest } from "@/lib/waiting-list";
+import { getBusinessHours, type BusinessHoursRule } from "@/lib/business-hours";
+import { getHolidayForDate } from "@/lib/holidays";
 
 interface ServiceWithCategory extends Service {
   categoryName: string;
@@ -163,6 +165,8 @@ export function AppointmentBooking() {
   const [allClients, setAllClients] = useState<Client[]>([]);
   const [familyMembers, setFamilyMembers] = useState<Client[]>([]);
   const [settings, setSettings] = useState<AllSettings | null>(null);
+  const [openingHours, setOpeningHours] = useState<BusinessHoursRule[]>([]);
+  const [closingHours, setClosingHours] = useState<BusinessHoursRule[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
   const [isRevalidating, startRevalidation] = useTransition();
@@ -225,6 +229,11 @@ export function AppointmentBooking() {
       }
 
     setIsLoading(false);
+    
+    getBusinessHours().then(({opening, closing}) => {
+        setOpeningHours(opening);
+        setClosingHours(closing);
+    });
 
     // Stale-while-revalidate
     setTimeout(() => {
@@ -391,62 +400,110 @@ export function AppointmentBooking() {
   const totalPrice = selectedServices.reduce((acc, service) => acc + (service.price || 0), 0);
   const isServiceSelected = (serviceId: string) => selectedServices.some(s => s.id === serviceId);
 
+  const getSlotStatus = useMemo(() => (date: Date, time: string): { isOpen: boolean, rule?: BusinessHoursRule } => {
+    const holiday = getHolidayForDate(date);
+    if (holiday?.isDayOff) {
+        return { isOpen: false, rule: { id: 0, days: [], startTime: '00:00', endTime: '23:59', dateRange: {}, name: holiday.name } };
+    }
+
+    const dayOfWeekIndex = getDay(date);
+    const dayId = daysOfWeek.find(d => d.dayIndex === dayOfWeekIndex)?.id;
+    const [hour, minute] = time.split(':').map(Number);
+    const slotTimeInMinutes = hour * 60 + minute;
+
+    for (const rule of closingHours) {
+        const isDayMatch = rule.days.length === 0 || (dayId && rule.days.includes(dayId));
+        const isDateInRange = (!rule.dateRange.from || date >= new Date(rule.dateRange.from)) && 
+                              (!rule.dateRange.to || date <= new Date(rule.dateRange.to));
+
+        if (isDayMatch && isDateInRange) {
+            const [startHour, startMinute] = rule.startTime.split(':').map(Number);
+            const [endHour, endMinute] = rule.endTime.split(':').map(Number);
+            const startTimeInMinutes = startHour * 60 + startMinute;
+            const endTimeInMinutes = endHour * 60 + endMinute;
+
+            if (slotTimeInMinutes >= startTimeInMinutes && slotTimeInMinutes < endTimeInMinutes) {
+                return { isOpen: false, rule }; 
+            }
+        }
+    }
+
+    if (openingHours.length === 0) return { isOpen: true }; // Default to open if no hours are set
+
+    for (const rule of openingHours) {
+        const isDayMatch = rule.days.length === 0 || (dayId && rule.days.includes(dayId));
+        const isDateInRange = (!rule.dateRange.from || date >= new Date(rule.dateRange.from)) && 
+                              (!rule.dateRange.to || date <= new Date(rule.dateRange.to));
+
+        if (isDayMatch && isDateInRange) {
+            const [startHour, startMinute] = rule.startTime.split(':').map(Number);
+            const [endHour, endMinute] = rule.endTime.split(':').map(Number);
+            const startTimeInMinutes = startHour * 60 + startMinute;
+            const endTimeInMinutes = endHour * 60 + endMinute;
+
+            if (slotTimeInMinutes >= startTimeInMinutes && slotTimeInMinutes < endTimeInMinutes) {
+                return { isOpen: true };
+            }
+        }
+    }
+
+    return { isOpen: false };
+}, [openingHours, closingHours]);
+
   const availableSlots = useMemo(() => {
     if (view !== 'calendar' || totalDuration === 0 || !settings) return {};
-    
+
     const slots: { [key: string]: string[] } = {};
     const days = Array.from({length: 7}, (_, i) => addDays(weekStart, i));
 
     for (const day of days) {
         const dayKey = format(day, 'yyyy-MM-dd');
         slots[dayKey] = [];
-        if (isBefore(day, startOfDay(new Date()))) continue; // Don't check past days
+        if (isBefore(day, startOfDay(new Date()))) continue;
 
         const dayAppointments = appointments
             .filter(a => {
                 if (a.id === changeAppointmentId) return false;
                 return isEqual(startOfDay(new Date(a.start)), startOfDay(day));
-            })
-            .sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+            });
 
-        if (!settings.businessDetails) continue;
-
-        let currentTime = startOfDay(day);
-        
-        let startHour = 8;
-        let endHour = 20;
-
-        currentTime = set(currentTime, { hours: startHour, minutes: 0 });
-        const endTime = set(startOfDay(day), { hours: endHour, minutes: 0 });
-
-        while (isBefore(currentTime, endTime)) {
-            const potentialEndTime = addMinutes(currentTime, totalDuration);
-            let isAvailable = true;
-
-            if (isBefore(currentTime, new Date())) {
-                isAvailable = false;
-            }
-
-            if (isAvailable) {
-                 const conflict = dayAppointments.some(app => {
-                    const appStart = new Date(app.start);
-                    const appEnd = new Date(app.end);
-                    return !(potentialEndTime <= appStart || currentTime >= appEnd);
-                 });
-                 if (conflict) {
-                     isAvailable = false;
-                 }
-            }
+        // Iterate in 15 minute intervals
+        for (let i = 0; i < (24 * 4); i++) {
+            const minutesFromMidnight = i * 15;
+            const currentTime = addMinutes(startOfDay(day), minutesFromMidnight);
             
-            if (isAvailable) {
-                slots[dayKey].push(format(currentTime, 'HH:mm'));
-            }
+            if (isBefore(currentTime, new Date())) continue;
+            
+            const potentialEndTime = addMinutes(currentTime, totalDuration);
 
-            currentTime = addMinutes(currentTime, 15);
+            // 1. Check business hours for the entire slot duration
+            let isWithinOperatingHours = true;
+            let tempTime = new Date(currentTime);
+            while (tempTime < potentialEndTime) {
+                const status = getSlotStatus(tempTime, format(tempTime, 'HH:mm'));
+                if (!status.isOpen) {
+                    isWithinOperatingHours = false;
+                    break;
+                }
+                tempTime = addMinutes(tempTime, 15); // Check every 15 minutes
+            }
+            if(!isWithinOperatingHours) continue;
+
+
+            // 2. Check for collisions with existing appointments
+            const hasCollision = dayAppointments.some(app => {
+                const appStart = new Date(app.start);
+                const appEnd = new Date(app.end);
+                return !(potentialEndTime <= appStart || currentTime >= appEnd);
+            });
+            if (hasCollision) continue;
+
+            // If all checks pass, add the slot
+            slots[dayKey].push(format(currentTime, 'HH:mm'));
         }
     }
     return slots;
-  }, [view, weekStart, appointments, settings, totalDuration, changeAppointmentId]);
+  }, [view, weekStart, appointments, settings, totalDuration, changeAppointmentId, getSlotStatus]);
 
   const dashboardLinkParams = new URLSearchParams();
   if (searchParams.get('id')) dashboardLinkParams.append('id', searchParams.get('id')!);
