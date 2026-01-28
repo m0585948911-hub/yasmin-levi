@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { DashboardIcon } from "@/components/dashboard-icon";
@@ -563,7 +564,6 @@ function DashboardContent() {
   const dashboardLink = `/dashboard?${clientParams.toString()}`;
   const newAppointmentLink = `/appointments?${clientParams.toString()}`;
   const myAppointmentsLink = `/my-appointments?${clientParams.toString()}`;
-  const shopLink = `/shop?${clientParams.toString()}`;
   const profileLink = `/profile?${clientParams.toString()}`;
   const myDocumentsLink = `/my-documents?${clientParams.toString()}`;
 
@@ -603,7 +603,7 @@ function DashboardContent() {
     { icon: <CalendarCheck2 size={iconSize} className="text-primary" />, label: "התורים שלי", href: myAppointmentsLink },
     { icon: <FileSignature size={iconSize} className="text-primary" />, label: "המסמכים שלי", href: myDocumentsLink, badgeCount: pendingDocsCount },
     { icon: <Users size={iconSize} className="text-primary" />, label: "בני משפחה", href: "#", action: handleFamilyClick },
-    { icon: <Store size={iconSize} className="text-primary" />, label: "חנות", href: shopLink },
+    { icon: <Store size={iconSize} className="text-primary" />, label: "חנות", href: "https://yasminlevi.co.il/shop", external: true },
     { icon: <Settings size={iconSize} className="text-primary" />, label: "פרופיל והגדרות", href: profileLink },
     { icon: <WazeIcon className="text-primary" style={{ width: iconSize, height: iconSize }}/>, label: "ניווט לקליניקה", href: "https://waze.com/ul?q=Brenner%207%2C%20Rehovot", external: true },
     { icon: <WhatsAppIcon className="text-primary" style={{ width: iconSize, height: iconSize }}/>, label: "פנייה בווצאפ", href: whatsappLink, external: true },
@@ -770,5 +770,7 @@ export default function DashboardPage() {
     </Suspense>
   );
 }
+
+    
 
     
