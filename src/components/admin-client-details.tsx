@@ -27,6 +27,7 @@ import {
   Tablet,
   Printer,
   FileSignature,
+  Download,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useState, useEffect, useTransition, useRef } from 'react';
+import { useState, useEffect, useTransition, useRef, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -63,6 +64,16 @@ import { db } from '@/lib/firebase';
 import { getFormTemplates, deleteFormInstance, type TreatmentFormTemplate, type FormField, type FilledFormInstance, type SignatureDetails } from '@/lib/form-templates';
 import { BirthDateSelector } from './birth-date-selector';
 import { SignaturePad } from './signature-pad';
+
+interface ClientImage {
+    src: string;
+    sourceType: 'treatment' | 'summary' | 'manual';
+    sourceName: string; // e.g., form name or "Manual Upload"
+    date: string; // ISO string
+    instanceId?: string; // for form/summary images
+    manualId?: string; // for manual images
+}
+
 
 const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
   if (typeof window === 'undefined') {
@@ -1007,6 +1018,63 @@ const FillTreatmentForm = ({
   );
 };
 
+const ViewImageDialog = ({ image, onClose, onDelete }: { image: ClientImage | null; onClose: () => void; onDelete: (manualId: string) => void; }) => {
+    if (!image) return null;
+
+    const handleDownload = () => {
+        const link = document.createElement('a');
+        link.href = image.src;
+        // Use a generic name with a timestamp to avoid issues
+        link.download = `image_${new Date(image.date).getTime()}.jpeg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    return (
+        <Dialog open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
+            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>תמונה מתוך: {image.sourceName}</DialogTitle>
+                    <DialogDescription>
+                        צולם בתאריך: {new Date(image.date).toLocaleString('he-IL')}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex-grow relative my-4">
+                    <Image src={image.src} alt="Full size" layout="fill" className="object-contain" />
+                </div>
+                <DialogFooter className="justify-between">
+                    <div>
+                        {image.sourceType === 'manual' && image.manualId && (
+                           <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive">
+                                    <Trash2 className="mr-2" /> מחק
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader><AlertDialogTitle>האם למחוק את התמונה?</AlertDialogTitle></AlertDialogHeader>
+                                <AlertDialogDescription>פעולה זו היא סופית ולא ניתן לשחזר אותה.</AlertDialogDescription>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>ביטול</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => onDelete(image.manualId!)}>מחק תמונה</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                           </AlertDialog>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={onClose}>סגור</Button>
+                        <Button onClick={handleDownload}>
+                            <Download className="mr-2" /> הורדה
+                        </Button>
+                    </div>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 const flagTypes: { value: ClientFlag['type']; label: string }[] = [
   { value: 'allergy', label: 'אלרגיה' },
   { value: 'meds', label: 'תרופות' },
@@ -1590,6 +1658,7 @@ const FamilyManagementDialog = ({
 
 export function AdminClientDetails({ initialClient }: { initialClient: Client }) {
   const { user } = useAdminUser();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [client, setClient] = useState<Client>(initialClient);
   const [nextAppointment, setNextAppointment] = useState<Appointment | null>(null);
   const [lastAppointment, setLastAppointment] = useState<Appointment | null>(null);
@@ -1612,6 +1681,10 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
   const [isFlagDialogOpen, setIsFlagDialogOpen] = useState(false);
   const [viewingSignedInstance, setViewingSignedInstance] = useState<FilledFormInstance | null>(null);
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
+
+  const [manualImages, setManualImages] = useState<any[]>([]);
+  const [viewingImage, setViewingImage] = useState<ClientImage | null>(null);
+
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
@@ -1667,6 +1740,9 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
 
     const docs = getFromLocalStorage<any[]>(`client_docs_${clientId}`, []);
     setUploadedDocs(docs);
+
+    const manual = getFromLocalStorage<any[]>(`client_manual_images_${clientId}`, []);
+    setManualImages(manual);
 
     setIsLoading(false);
   };
@@ -1863,6 +1939,76 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
   const pendingClientForms = clientFormHistory.filter(
     (instance) => instance.status === 'pending_client_fill'
   );
+
+  const handleManualImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files || []);
+        if (!files.length) return;
+
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target?.result as string;
+                const newImage = {
+                    id: crypto.randomUUID(),
+                    dataUrl,
+                    createdAt: new Date().toISOString(),
+                };
+                const updatedImages = [...manualImages, newImage];
+                setManualImages(updatedImages);
+                setInLocalStorage(`client_manual_images_${client.id}`, updatedImages);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        toast({ title: 'הצלחה!', description: `${files.length} תמונות הועלו בהצלחה.` });
+    };
+
+    const handleDeleteManualImage = (manualId: string) => {
+        const updatedImages = manualImages.filter(img => img.id !== manualId);
+        setManualImages(updatedImages);
+        setInLocalStorage(`client_manual_images_${client.id}`, updatedImages);
+        setViewingImage(null);
+        toast({ title: 'הצלחה!', description: 'התמונה נמחקה.' });
+    };
+    
+     const allClientImages: ClientImage[] = useMemo(() => {
+        const images: ClientImage[] = [];
+
+        // From forms/summaries in clientFormHistory
+        clientFormHistory.forEach(instance => {
+            const template = allTemplates.find(t => t.id === instance.templateId);
+            if (!template || !instance.filledAt) return;
+
+            template.fields.forEach(field => {
+                if (field.type === 'image' && instance.data[field.id] && Array.isArray(instance.data[field.id])) {
+                    (instance.data[field.id] as string[]).forEach(imgSrc => {
+                        images.push({
+                            src: imgSrc,
+                            sourceType: template.type,
+                            sourceName: template.name,
+                            date: instance.filledAt!,
+                            instanceId: instance.instanceId,
+                        });
+                    });
+                }
+            });
+        });
+
+        // From manual uploads
+        manualImages.forEach(img => {
+            images.push({
+                src: img.dataUrl,
+                sourceType: 'manual',
+                sourceName: 'העלאה ידנית',
+                date: img.createdAt,
+                manualId: img.id,
+            });
+        });
+
+        // Sort by date, newest first
+        return images.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [clientFormHistory, manualImages, allTemplates]);
+
 
   if (isFillingNote && noteForAppointment) {
     const mainServiceId = noteForAppointment.serviceId.split(',')[0];
@@ -2080,7 +2226,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                   <Card>
                       <CardHeader>
                           <div className="flex justify-between items-center">
-                              <CardTitle>מסמכים וטפסים</CardTitle>
+                              <CardTitle className="text-right">מסמכים וטפסים</CardTitle>
                               <div className="flex items-center gap-2">
                                 <Button variant="outline" onClick={() => { setIsSignDocModalOpen(true); }}>
                                     <Upload className="mr-2" />
@@ -2103,7 +2249,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                                <ul className="space-y-2">
                                   {pendingClientForms.map((form) => (
                                       <li key={form.instanceId} className="flex items-center text-sm p-3 border rounded-md bg-yellow-50 border-yellow-200">
-                                          <p>{form.templateName}</p>
+                                          <p className="flex-grow">{form.templateName}</p>
                                            <div className="flex items-center gap-2 ml-auto">
                                                 <p className="text-xs text-yellow-700">נשלח בתאריך {format(new Date(form.assignedAt), 'dd.MM.yy')}</p>
                                                 <AlertDialog>
@@ -2139,7 +2285,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                               <ul className="space-y-2">
                                   {uploadedDocs.map((doc) => (
                                       <li key={doc.id} className="flex items-center p-3 border rounded-md bg-accent/50">
-                                          <div className="text-right">
+                                          <div className="text-right flex-grow">
                                               <p className="font-semibold">{doc.name}</p>
                                               <p className="text-sm text-muted-foreground">
                                                   סטטוס: {doc.status === 'pending_signature' ? 'ממתין לחתימה' : 'נחתם'}
@@ -2180,7 +2326,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                                <ul className="space-y-2">
                                   {signedForms.map((form) => (
                                       <li key={form.instanceId} className="flex items-center text-sm p-3 border rounded-md bg-accent/50">
-                                          <p>{form.templateName}</p>
+                                          <p className="flex-grow">{form.templateName}</p>
                                           <div className="flex items-center gap-2 ml-auto">
                                               <Badge className="bg-green-100 text-green-800">
                                                   חתום ({form.signatureDetails?.signedAt ? format(new Date(form.signatureDetails.signedAt), 'dd.MM.yy') : ''})
@@ -2275,7 +2421,45 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
               </Card>
           </TabsContent>
           <TabsContent value="photos" className="mt-4">
-            <Card><CardContent className="p-8 text-center text-muted-foreground">גלריית תמונות לפני/אחרי תופיע כאן (בבנייה).</CardContent></Card>
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <CardTitle>גלריית תמונות</CardTitle>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept="image/*"
+                            multiple
+                            onChange={handleManualImageUpload}
+                        />
+                        <Button onClick={() => fileInputRef.current?.click()}>
+                            <Upload className="mr-2" />
+                            העלאת תמונות
+                        </Button>
+                    </div>
+                    <CardDescription>
+                        כל התמונות של הלקוח/ה, כולל העלאות ידניות, תמונות מטפסים וסיכומים.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {allClientImages.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            {allClientImages.map((image, index) => (
+                                <button key={index} onClick={() => setViewingImage(image)} className="group relative aspect-square w-full overflow-hidden rounded-lg border">
+                                    <Image src={image.src} alt={`Image ${index + 1}`} layout="fill" className="object-cover transition-transform group-hover:scale-105" />
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-1 text-white text-xs text-center">
+                                        <p>{new Date(image.date).toLocaleDateString('he-IL')}</p>
+                                        <p className="truncate">{image.sourceName}</p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-center text-muted-foreground py-16">לא נמצאו תמונות עבור לקוח/ה זו.</p>
+                    )}
+                </CardContent>
+            </Card>
           </TabsContent>
           <TabsContent value="communication" className="mt-4">
               <Card><CardContent className="p-8 text-center text-muted-foreground">התכתבות עם הלקוח/ה תופיע כאן.</CardContent></Card>
@@ -2403,6 +2587,11 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             template={viewingInstance ? summaryTemplates.find(t => t.id === viewingInstance.templateId) || null : null}
             client={client}
             adminUserName={user ? `${user.firstName} ${user.lastName}` : 'מנהל/ת'}
+        />
+        <ViewImageDialog
+            image={viewingImage}
+            onClose={() => setViewingImage(null)}
+            onDelete={handleDeleteManualImage}
         />
     </div>
   );
