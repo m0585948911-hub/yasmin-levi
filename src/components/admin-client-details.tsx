@@ -30,6 +30,7 @@ import {
   FileSignature,
   Download,
   MessageSquare,
+  Bell,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -2444,14 +2445,14 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                                 </Button>
                               </div>
                           </div>
-                          <CardDescription className="text-right">
+                          <CardDescription>
                               מסמכים שנשלחו ללקוח למילוי או חתימה.
                           </CardDescription>
                       </CardHeader>
                       <CardContent>
                            {pendingClientForms.length > 0 && (
                             <>
-                              <h3 className="font-semibold mb-2 text-right">ממתין למילוי על ידי הלקוח</h3>
+                              <h3 className="font-semibold mb-2">ממתין למילוי על ידי הלקוח</h3>
                                <ul className="space-y-2">
                                   {pendingClientForms.map((form) => (
                                       <li key={form.instanceId} className="flex items-center text-sm p-3 border rounded-md bg-yellow-50 border-yellow-200">
@@ -2491,7 +2492,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                               <ul className="space-y-2">
                                   {uploadedDocs.map((doc) => (
                                       <li key={doc.id} className="flex items-center p-3 border rounded-md bg-accent/50">
-                                          <div className="text-right flex-grow">
+                                          <div className="flex-grow">
                                               <p className="font-semibold">{doc.name}</p>
                                               <p className="text-sm text-muted-foreground">
                                                   סטטוס: {doc.status === 'pending_signature' ? 'ממתין לחתימה' : 'נחתם'}
@@ -2528,7 +2529,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                            {signedForms.length > 0 && (
                             <>
                               <Separator className="my-4" />
-                              <h3 className="font-semibold mb-2 text-right">טפסים חתומים</h3>
+                              <h3 className="font-semibold mb-2">טפסים חתומים</h3>
                                <ul className="space-y-2">
                                   {signedForms.map((form) => (
                                       <li key={form.instanceId} className="flex items-center text-sm p-3 border rounded-md bg-accent/50">
