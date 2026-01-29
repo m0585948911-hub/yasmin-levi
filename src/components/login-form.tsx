@@ -64,6 +64,22 @@ export function LoginForm({ onUserNotFound }: { onUserNotFound: (phone: string) 
       const result = await login(formData);
 
       if (result?.success && result.redirectUrl) {
+        try {
+            const url = new URL(result.redirectUrl, window.location.origin);
+            const params = url.searchParams;
+            const clientUser = {
+                id: params.get('id'),
+                firstName: params.get('firstName'),
+                lastName: params.get('lastName'),
+                gender: params.get('gender'),
+                phone: params.get('phone'),
+            };
+            if (clientUser.id) {
+                localStorage.setItem('clientUser', JSON.stringify(clientUser));
+            }
+        } catch (e) {
+            console.error("Failed to save client user to storage", e);
+        }
         router.push(result.redirectUrl);
       } else if (result?.reason === 'not_found' && result.phone) {
         onUserNotFound(result.phone);

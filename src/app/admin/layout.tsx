@@ -7,13 +7,19 @@ import Link from "next/link";
 import { LogOut, User } from "lucide-react";
 import { AdminAppointmentNotifier } from "@/components/admin-appointment-notifier";
 import { AdminUserProvider, useAdminUser } from "@/hooks/use-admin-user";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { AdminReminderNotifier } from "@/components/admin-reminder-notifier";
 
 
 function AdminHeader() {
-    const { user } = useAdminUser();
+    const { user, setUser } = useAdminUser();
+    const router = useRouter();
+
+    const handleLogout = () => {
+        setUser(null);
+        router.push('/admin/login');
+    }
 
     if (!user) {
         return null;
@@ -39,11 +45,9 @@ function AdminHeader() {
                 </Tooltip>
                  <Tooltip>
                     <TooltipTrigger asChild>
-                        <Link href="/admin/login" passHref>
-                            <Button variant="outline" size="icon" className="rounded-full">
-                                <LogOut />
-                            </Button>
-                        </Link>
+                        <Button variant="outline" size="icon" className="rounded-full" onClick={handleLogout}>
+                            <LogOut />
+                        </Button>
                     </TooltipTrigger>
                      <TooltipContent><p>התנתקות</p></TooltipContent>
                 </Tooltip>

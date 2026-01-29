@@ -551,6 +551,7 @@ function DashboardContent() {
 
   const handleLogout = () => {
     localStorage.removeItem(DATA_LOADED_KEY);
+    localStorage.removeItem('clientUser');
     router.push('/');
   };
   
