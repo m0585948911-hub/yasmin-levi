@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -7,14 +5,14 @@ import { collection, query, where, onSnapshot, Timestamp } from 'firebase/firest
 import { db } from '@/lib/firebase';
 import { Appointment } from '@/lib/appointments';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -25,6 +23,7 @@ interface AppNotification {
   title: string;
   content: string;
   expiresAt: Date;
+  createdAt: Date;
 }
 
 const LinkifiedText = ({ text }: { text: string }) => {
@@ -78,7 +77,8 @@ export function AppointmentListener({ clientId }: { clientId: string }) {
               if (latestNotification) {
                   const notificationWithDate = {
                     ...latestNotification,
-                    expiresAt: new Date(latestNotification.expiresAt)
+                    expiresAt: new Date(latestNotification.expiresAt),
+                    createdAt: new Date(latestNotification.createdAt),
                   };
                   
                   // Check if notification has expired
@@ -149,6 +149,7 @@ export function AppointmentListener({ clientId }: { clientId: string }) {
                   title: "לידיעתך, נקבע עבורך תור חדש",
                   content: `שירות: ${data.serviceName}\nבתאריך: ${format(appointmentStart, 'eeee, d MMMM yyyy', { locale: he })}\nבשעה: ${format(appointmentStart, 'HH:mm')}`,
                   expiresAt: appointmentStart, // The notification expires when the appointment starts
+                  createdAt: new Date(),
                 });
                 setIsOpen(true);
                 audioRef.current?.play().catch(e => console.error("Audio play failed", e));
@@ -177,28 +178,28 @@ export function AppointmentListener({ clientId }: { clientId: string }) {
     <>
       <audio ref={audioRef} src="https://firebasestorage.googleapis.com/v0/b/yasmin-beauty-diary.firebasestorage.app/o/MP3%2Fsound-email-received.mp3?alt=media&token=ba9b57a8-bfa9-4fb0-98a5-6290616479cf" preload="auto" />
       {notification && (
-        <AlertDialog open={isOpen} onOpenChange={(open) => {
+        <Dialog open={isOpen} onOpenChange={(open) => {
             if (!open) {
                 setIsOpen(false);
                 setNotification(null);
             }
         }}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>{notification.title}</AlertDialogTitle>
-                    <AlertDialogDescription asChild>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{notification.title}</DialogTitle>
+                    <DialogDescription asChild>
                          <div className="space-y-2 mt-4 text-center">
                             <LinkifiedText text={notification.content} />
                          </div>
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogAction onClick={handleConfirm}>
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button onClick={handleConfirm}>
                         {notification.title.includes("אשר") || notification.title.includes("נקבע") ? "צפה בתורים שלי" : "הבנתי"}
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
       )}
     </>
   );

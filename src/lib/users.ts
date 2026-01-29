@@ -38,7 +38,7 @@ export interface User {
 const usersCollection = collection(db, 'users');
 
 async function initializeDefaultUsers() {
-    const q = query(usersCollection);
+    const q = query(usersCollection, limit(1));
     const snapshot = await getDocs(q);
     if (snapshot.empty) {
         console.log("No users found, initializing default users...");
@@ -97,30 +97,6 @@ async function initializeDefaultUsers() {
         });
         await batch.commit();
         console.log("Default users have been initialized.");
-    } else {
-        // Ensure admin user exists with correct password if db is not empty
-        const adminQ = query(usersCollection, where("phone", "==", "039279898"));
-        const adminSnapshot = await getDocs(adminQ);
-        if (adminSnapshot.empty) {
-            await addDoc(usersCollection, {
-                businessId: 'default',
-                firstName: "admin",
-                lastName: "",
-                idNumber: "000000000",
-                email: "admin@admin.com",
-                phone: "039279898",
-                password: "AX039279898",
-                permission: 'developer',
-                gender: 'male',
-                isSuperAdmin: true,
-            });
-        } else {
-            const adminDoc = adminSnapshot.docs[0];
-            const adminData = adminDoc.data();
-            if (adminData.password !== "AX039279898" || adminData.isSuperAdmin !== true || adminData.permission !== 'developer') {
-                await updateDoc(adminDoc.ref, { password: "AX039279898", isSuperAdmin: true, permission: 'developer' });
-            }
-        }
     }
 }
 
