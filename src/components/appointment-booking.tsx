@@ -177,6 +177,7 @@ export function AppointmentBooking() {
 
 
   const searchParams = useSearchParams();
+  const [targetClientId, setTargetClientId] = useState<string>(() => searchParams.get('bookForClientId') || searchParams.get('id') || '');
   const router = useRouter();
   const { toast } = useToast();
 
@@ -184,7 +185,6 @@ export function AppointmentBooking() {
   const [selectedServices, setSelectedServices] = useState<ServiceWithCategory[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedSlot, setSelectedSlot] = useState<{ date: Date; time: string } | null>(null);
-  const [targetClientId, setTargetClientId] = useState<string>('');
   const [showApprovalPendingDialog, setShowApprovalPendingDialog] = useState(false);
   const [showBookingSuccessDialog, setShowBookingSuccessDialog] = useState(false);
   const [isWaitingListDialogOpen, setIsWaitingListDialogOpen] = useState(false);
@@ -206,10 +206,9 @@ export function AppointmentBooking() {
     setServices(cachedServices);
     setAllClients(cachedClients);
 
-    if (bookForClientId) {
-      setTargetClientId(bookForClientId);
-    } else if (loggedInClientId) {
-      setTargetClientId(loggedInClientId);
+    const newTargetId = bookForClientId || loggedInClientId || '';
+    if (newTargetId !== targetClientId) {
+      setTargetClientId(newTargetId);
     }
 
      if (loggedInClientId) {
@@ -247,7 +246,7 @@ export function AppointmentBooking() {
       });
     }, 1000);
 
-  }, [searchParams, loggedInClientId, bookForClientId]);
+  }, [bookForClientId, loggedInClientId, searchParams, targetClientId]);
 
   useEffect(() => {
     loadDataFromCache();
@@ -552,20 +551,28 @@ export function AppointmentBooking() {
                         <Users className="text-primary" />
                         קביעת תור עבור:
                     </Label>
-                    <RadioGroup value={targetClientId} onValueChange={setTargetClientId} className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 flex-grow">
-                      {loggedInUser && (
-                        <Label htmlFor={loggedInUser.id} className={cn("flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-accent", targetClientId === loggedInUser.id && "bg-primary/10 border-primary")}>
-                          <RadioGroupItem value={loggedInUser.id} id={loggedInUser.id} />
-                          <span>עבורי ({loggedInUser.firstName})</span>
-                        </Label>
-                      )}
-                      {familyMembers.map(member => (
-                        <Label key={member.id} htmlFor={member.id} className={cn("flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-accent", targetClientId === member.id && "bg-primary/10 border-primary")}>
-                          <RadioGroupItem value={member.id} id={member.id} />
-                          <span>{member.firstName} {member.lastName}</span>
-                        </Label>
-                      ))}
-                    </RadioGroup>
+                    {familyMembers.length > 0 ? (
+                        <RadioGroup value={targetClientId} onValueChange={setTargetClientId} className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 flex-grow">
+                        {loggedInUser && (
+                            <Label htmlFor={loggedInUser.id} className={cn("flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-accent", targetClientId === loggedInUser.id && "bg-primary/10 border-primary")}>
+                            <RadioGroupItem value={loggedInUser.id} id={loggedInUser.id} />
+                            <span>עבורי ({loggedInUser.firstName})</span>
+                            </Label>
+                        )}
+                        {familyMembers.map(member => (
+                            <Label key={member.id} htmlFor={member.id} className={cn("flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-accent", targetClientId === member.id && "bg-primary/10 border-primary")}>
+                            <RadioGroupItem value={member.id} id={member.id} />
+                            <span>{member.firstName} {member.lastName}</span>
+                            </Label>
+                        ))}
+                        </RadioGroup>
+                    ) : (
+                        <Input
+                            value={loggedInUser ? `עבורי (${loggedInUser.firstName})` : ''}
+                            disabled
+                            className="flex-grow mt-2 sm:mt-0"
+                        />
+                    )}
                 </div>
               </CardContent>
             </Card>
