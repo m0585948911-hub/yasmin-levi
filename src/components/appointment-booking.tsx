@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Category } from "@/lib/categories";
@@ -22,6 +23,7 @@ import { Logo } from "./logo";
 import { Client } from "@/lib/clients";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Label } from "./ui/label";
+import { Input } from "./ui/input";
 import type { AllSettings } from "@/lib/settings-types";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogContent } from "./ui/dialog";
 import { Textarea } from "./ui/textarea";
@@ -549,19 +551,28 @@ export function AppointmentBooking() {
                         <Users className="text-primary" />
                         קביעת תור עבור:
                     </Label>
-                  <Select value={targetClientId} onValueChange={setTargetClientId}>
-                    <SelectTrigger id="booking-for" className="flex-grow">
-                      <SelectValue placeholder="בחר עבור מי התור..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {loggedInUser && <SelectItem value={loggedInUser.id}>עבורי ({loggedInUser.firstName})</SelectItem>}
-                      {familyMembers.map(member => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.firstName} {member.lastName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    {familyMembers.length > 0 && loggedInUser ? (
+                        <Select value={targetClientId} onValueChange={setTargetClientId}>
+                            <SelectTrigger id="booking-for" className="flex-grow">
+                            <SelectValue placeholder="בחר עבור מי התור..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                            {loggedInUser && <SelectItem value={loggedInUser.id}>עבורי ({loggedInUser.firstName})</SelectItem>}
+                            {familyMembers.map(member => (
+                                <SelectItem key={member.id} value={member.id}>
+                                {member.firstName} {member.lastName}
+                                </SelectItem>
+                            ))}
+                            </SelectContent>
+                        </Select>
+                    ) : (
+                        <Input
+                            id="booking-for"
+                            value={loggedInUser ? `עבורי (${loggedInUser.firstName})` : 'טוען...'}
+                            disabled
+                            className="flex-grow"
+                        />
+                    )}
                 </div>
               </CardContent>
             </Card>
