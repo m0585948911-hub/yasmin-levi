@@ -30,6 +30,7 @@ import { Textarea } from "./ui/textarea";
 import { createWaitingListRequest } from "@/lib/waiting-list";
 import { getBusinessHours, type BusinessHoursRule } from "@/lib/business-hours";
 import { getHolidayForDate } from "@/lib/holidays";
+import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 
 interface ServiceWithCategory extends Service {
   categoryName: string;
@@ -346,7 +347,7 @@ export function AppointmentBooking() {
             await saveAppointment(appointmentData);
             
             const actionType = changeAppointmentId ? 'Appointment Changed' : 'Appointment Booked';
-            const logDetails = `${actionType === 'Appointment Changed' ? 'Changed' : 'New'} appointment for ${clientName} for ${serviceNames} at ${format(startDate, 'dd/MM/yyyy HH:mm')}. Status: ${finalStatus}.`;
+            const logDetails = `${actionType === 'Appointment Changed' ? 'Changed' : 'Created'} appointment for ${clientName} for ${serviceNames} at ${format(startDate, 'dd/MM/yyyy HH:mm')}. Status: ${finalStatus}.`;
             await createLog({
                 action: actionType,
                 details: logDetails,
@@ -547,32 +548,24 @@ export function AppointmentBooking() {
             <Card>
               <CardContent className="p-4">
                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="booking-for" className="font-semibold flex items-center gap-2 flex-shrink-0">
+                    <Label className="font-semibold flex items-center gap-2 flex-shrink-0 pt-3 sm:pt-0">
                         <Users className="text-primary" />
                         קביעת תור עבור:
                     </Label>
-                    {familyMembers.length > 0 && loggedInUser ? (
-                        <Select value={targetClientId} onValueChange={setTargetClientId}>
-                            <SelectTrigger id="booking-for" className="flex-grow">
-                            <SelectValue placeholder="בחר עבור מי התור..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                            {loggedInUser && <SelectItem value={loggedInUser.id}>עבורי ({loggedInUser.firstName})</SelectItem>}
-                            {familyMembers.map(member => (
-                                <SelectItem key={member.id} value={member.id}>
-                                {member.firstName} {member.lastName}
-                                </SelectItem>
-                            ))}
-                            </SelectContent>
-                        </Select>
-                    ) : (
-                        <Input
-                            id="booking-for"
-                            value={loggedInUser ? `עבורי (${loggedInUser.firstName})` : 'טוען...'}
-                            disabled
-                            className="flex-grow"
-                        />
-                    )}
+                    <RadioGroup value={targetClientId} onValueChange={setTargetClientId} className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 flex-grow">
+                      {loggedInUser && (
+                        <Label htmlFor={loggedInUser.id} className={cn("flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-accent", targetClientId === loggedInUser.id && "bg-primary/10 border-primary")}>
+                          <RadioGroupItem value={loggedInUser.id} id={loggedInUser.id} />
+                          <span>עבורי ({loggedInUser.firstName})</span>
+                        </Label>
+                      )}
+                      {familyMembers.map(member => (
+                        <Label key={member.id} htmlFor={member.id} className={cn("flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-accent", targetClientId === member.id && "bg-primary/10 border-primary")}>
+                          <RadioGroupItem value={member.id} id={member.id} />
+                          <span>{member.firstName} {member.lastName}</span>
+                        </Label>
+                      ))}
+                    </RadioGroup>
                 </div>
               </CardContent>
             </Card>
