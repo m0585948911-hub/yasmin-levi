@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { registerPushToken } from '@/lib/push';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -132,4 +133,4 @@ export const PushNotificationHandler = () => {
         </AlertDialog>
       </>
   );
-}
+};
