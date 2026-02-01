@@ -18,9 +18,10 @@ import {
   Briefcase,
   Loader2,
   BellRing,
+  CalendarX2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { getPendingAppointments } from "@/lib/appointments";
+import { getAppointments } from "@/lib/appointments";
 import { getWaitingListRequests } from "@/lib/waiting-list";
 import { useAdminUser } from "@/hooks/use-admin-user";
 import { getReminders } from "@/lib/reminders";
@@ -32,6 +33,7 @@ export default function AdminDashboardPage() {
   const { user, permissions } = useAdminUser();
   
   const [pendingAppointmentsCount, setPendingAppointmentsCount] = useState(0);
+  const [pendingCancellationsCount, setPendingCancellationsCount] = useState(0);
   const [waitingListCount, setWaitingListCount] = useState(0);
   const [pendingRemindersCount, setPendingRemindersCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,19 +43,22 @@ export default function AdminDashboardPage() {
       if (!user) return;
       setIsLoading(true);
       try {
-        const [pending, waiting, reminders] = await Promise.all([
-            permissions.canApproveAppointments ? getPendingAppointments() : Promise.resolve([]),
+        const [pending, waiting, reminders, cancellations] = await Promise.all([
+            permissions.canApproveAppointments ? getAppointments(undefined, undefined, 'default', undefined, ['pending']) : Promise.resolve([]),
             getWaitingListRequests(),
             getReminders(['pending']),
+            permissions.canCancelAppointments ? getAppointments(undefined, undefined, 'default', undefined, ['pending_cancellation']) : Promise.resolve([]),
         ]);
         setPendingAppointmentsCount(pending.length);
         setWaitingListCount(waiting.filter(r => r.status === 'new').length);
         setPendingRemindersCount(reminders.length);
+        setPendingCancellationsCount(cancellations.length);
       } catch (error) {
         console.error("Failed to fetch counts", error);
         setPendingAppointmentsCount(0);
         setWaitingListCount(0);
         setPendingRemindersCount(0);
+        setPendingCancellationsCount(0);
       } finally {
         setIsLoading(false);
       }
@@ -81,6 +86,14 @@ export default function AdminDashboardPage() {
       href: "/admin/appointments/pending", 
       badgeCount: pendingAppointmentsCount,
       requiredPermission: permissions.canApproveAppointments
+    },
+    {
+      id: 'pending_cancellation',
+      icon: isLoading ? <Loader2 size={iconSize} className="animate-spin text-primary" /> : <CalendarX2 size={iconSize} className="text-yellow-500" />,
+      label: 'בקשות לביטול',
+      href: '/admin/appointments/pending',
+      badgeCount: pendingCancellationsCount,
+      requiredPermission: permissions.canCancelAppointments
     },
     { 
         id: 'waiting',
@@ -115,7 +128,7 @@ export default function AdminDashboardPage() {
         <QuoteFlow />
       </div>
        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6 max-w-4xl mx-auto">
-          {features.map(feature => <DashboardIcon key={feature.label} {...feature} />)}
+          {features.map(feature => <DashboardIcon key={feature.id} {...feature} />)}
        </div>
     </div>
   );
