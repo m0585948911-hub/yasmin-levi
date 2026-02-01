@@ -1,5 +1,3 @@
-
-
 'use client'
 
 import { DashboardIcon } from "@/components/dashboard-icon";
@@ -31,7 +29,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PushNotificationHandler } from "@/components/PushNotificationHandler";
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { sendPushToClient } from "@/lib/send-push";
+import { VersionNotifier } from "@/components/version-notifier";
+import { testLocalNotification } from "@/lib/client-notifications";
 
 import { 
   CalendarPlus, 
@@ -644,20 +643,21 @@ function DashboardContent() {
             <Button
               onClick={async () => {
                 try {
-                  const res = await sendPushToClient({
-                    clientId: "TEST",
-                    title: "בדיקת PUSH",
-                    body: "אם הגעת ללוגים – עובד!",
-                  });
-                  console.log("sendPushToClient ok:", res);
-                  alert("נשלח (בדוק לוגים)");
+                  const ok = await testLocalNotification();
+                  if (ok) {
+                    alert("נשלחה התראה ✅ בדוק למעלה במסך");
+                  } else {
+                    alert(
+                      "ההתראות זמינות רק באפליקציה (Android/iOS) או שהרשאה חסומה."
+                    );
+                  }
                 } catch (e) {
-                  console.error("sendPushToClient failed:", e);
+                  console.error("testLocalNotification failed:", e);
                   alert("נכשל (בדוק Console)");
                 }
               }}
             >
-              בדיקת PUSH
+              Test Local Notification
             </Button>
         </div>
 
@@ -783,7 +783,12 @@ function DashboardPageWrapper() {
       return <AppDataLoader onDataLoaded={() => setDataLoaded(true)} />;
   }
 
-  return <DashboardContent />;
+  return (
+    <>
+      <VersionNotifier />
+      <DashboardContent />
+    </>
+  );
 }
 
 export default function DashboardPage() {

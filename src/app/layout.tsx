@@ -33,7 +33,7 @@ export default function RootLayout({
         {children}
         <Toaster />
         <footer className="fixed bottom-0 left-0 right-0 p-2 text-center text-xs text-muted-foreground bg-background/80 backdrop-blur-sm z-50">
-          <p>פיתוח: יסמין לוי | גרסה: Y.1.0</p>
+          <p>פיתוח: יסמין לוי</p>
         </footer>
       </body>
     </html>

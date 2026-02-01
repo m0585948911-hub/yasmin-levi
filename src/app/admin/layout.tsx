@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Logo } from "@/components/logo";
@@ -10,6 +9,7 @@ import { AdminUserProvider, useAdminUser } from "@/hooks/use-admin-user";
 import { usePathname, useRouter } from "next/navigation";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { AdminReminderNotifier } from "@/components/admin-reminder-notifier";
+import { VersionNotifier } from "@/components/version-notifier";
 
 
 function AdminHeader() {
@@ -74,6 +74,7 @@ export default function AdminLayout({
           </main>
           {!isLoginPage && <AdminAppointmentNotifier />}
           {!isLoginPage && <AdminReminderNotifier />}
+          <VersionNotifier />
       </div>
     </AdminUserProvider>
   );
