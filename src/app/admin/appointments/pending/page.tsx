@@ -5,9 +5,9 @@
 import { useState, useEffect, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, ArrowLeft, Check, X, Phone, Calendar, ThumbsUp, FileText, Eye } from 'lucide-react';
+import { Loader2, ArrowLeft, Check, X, Phone, Calendar, ThumbsUp, FileText, Eye, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
-import { getPendingAppointments, updateAppointmentStatus, Appointment } from '@/lib/appointments';
+import { updateAppointmentStatus, Appointment, getAppointments } from '@/lib/appointments';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
@@ -146,23 +146,29 @@ const ViewTreatmentHistoryDialog = ({
 
 
 export default function PendingAppointmentsPage() {
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [pendingAppointments, setPendingAppointments] = useState<Appointment[]>([]);
+    const [cancellationRequests, setCancellationRequests] = useState<Appointment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, startTransition] = useTransition();
     const { toast } = useToast();
     const [allTemplates, setAllTemplates] = useState<TreatmentFormTemplate[]>([]);
     const [selectedClientHistory, setSelectedClientHistory] = useState<{name: string, history: FilledFormInstance[] } | null>(null);
 
-    const fetchPendingAppointments = async () => {
+    const fetchRequests = async () => {
         setIsLoading(true);
         try {
-            const pending = await getPendingAppointments();
-            setAppointments(pending.sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
+            const [pending, cancellations] = await Promise.all([
+                getAppointments(undefined, undefined, 'default', undefined, ['pending']),
+                getAppointments(undefined, undefined, 'default', undefined, ['pending_cancellation'])
+            ]);
+            
+            setPendingAppointments(pending.sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
+            setCancellationRequests(cancellations.sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
         } catch (error) {
             toast({
                 variant: "destructive",
                 title: "שגיאה",
-                description: "לא ניתן היה לטעון את רשימת התורים הממתינים."
+                description: "לא ניתן היה לטעון את רשימת הבקשות."
             })
         } finally {
             setIsLoading(false);
@@ -174,12 +180,12 @@ export default function PendingAppointmentsPage() {
     }, []);
 
     useEffect(() => {
-        fetchPendingAppointments();
+        fetchRequests();
     }, []);
     
     const handleApprove = (id: string) => {
         startTransition(async () => {
-            const approvedAppointment = appointments.find(a => a.id === id);
+            const approvedAppointment = pendingAppointments.find(a => a.id === id);
             const result = await updateAppointmentStatus(id, 'scheduled');
             if (result.success) {
                 await createLog({
@@ -189,7 +195,7 @@ export default function PendingAppointmentsPage() {
                 });
                 
                 toast({ title: "הצלחה", description: "התור אושר בהצלחה. הודעה נשלחה ללקוח." });
-                fetchPendingAppointments(); // Refresh the list
+                fetchRequests(); // Refresh the list
             } else {
                 toast({ variant: "destructive", title: "שגיאה", description: "לא ניתן היה לאשר את התור." });
             }
@@ -198,8 +204,7 @@ export default function PendingAppointmentsPage() {
 
     const handleReject = (id: string) => {
         startTransition(async () => {
-            const rejectedAppointment = appointments.find(a => a.id === id);
-            // Change status to 'cancelled' to trigger backend notification
+            const rejectedAppointment = pendingAppointments.find(a => a.id === id);
             const result = await updateAppointmentStatus(id, 'cancelled', 'admin');
              if (result.success) {
                 await createLog({
@@ -208,9 +213,45 @@ export default function PendingAppointmentsPage() {
                     user: 'Admin'
                 });
                 toast({ title: "הצלחה", description: "התור נדחה והודעה נשלחה ללקוח." });
-                fetchPendingAppointments(); // Refresh the list
+                fetchRequests(); // Refresh the list
             } else {
                 toast({ variant: "destructive", title: "שגיאה", description: "לא ניתן היה לדחות את התור." });
+            }
+        });
+    };
+
+    const handleApproveCancellation = (id: string) => {
+        startTransition(async () => {
+            const cancelledAppointment = cancellationRequests.find(a => a.id === id);
+            const result = await updateAppointmentStatus(id, 'cancelled', 'admin');
+             if (result.success) {
+                await createLog({
+                    action: 'Cancellation Approved',
+                    details: `Cancellation for ${cancelledAppointment?.clientName} was approved.`,
+                    user: 'Admin'
+                });
+                toast({ title: "הצלחה", description: "ביטול התור אושר והודעה נשלחה ללקוח." });
+                fetchRequests();
+            } else {
+                toast({ variant: "destructive", title: "שגיאה", description: "לא ניתן היה לאשר את הביטול." });
+            }
+        });
+    };
+    
+    const handleRejectCancellation = (id: string) => {
+        startTransition(async () => {
+            const appointment = cancellationRequests.find(a => a.id === id);
+            const result = await updateAppointmentStatus(id, 'scheduled'); // Revert to scheduled
+             if (result.success) {
+                await createLog({
+                    action: 'Cancellation Rejected',
+                    details: `Cancellation request for ${appointment?.clientName} was rejected.`,
+                    user: 'Admin'
+                });
+                toast({ title: "הצלחה", description: "בקשת הביטול נדחתה. התור נשאר כפי שהיה." });
+                fetchRequests();
+            } else {
+                toast({ variant: "destructive", title: "שגיאה", description: "לא ניתן היה לדחות את בקשת הביטול." });
             }
         });
     };
@@ -244,12 +285,12 @@ export default function PendingAppointmentsPage() {
                         חזרה
                     </Button>
                 </Link>
-                <h1 className="text-2xl font-bold">רשימת תורים לאישור</h1>
+                <h1 className="text-2xl font-bold">ניהול בקשות</h1>
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>תורים ממתינים</CardTitle>
+                    <CardTitle>תורים ממתינים לאישור</CardTitle>
                     <CardDescription>אשר או דחה את בקשות התורים הבאות.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -257,10 +298,10 @@ export default function PendingAppointmentsPage() {
                         <div className="flex justify-center items-center h-48">
                             <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                         </div>
-                    ) : appointments.length > 0 ? (
+                    ) : pendingAppointments.length > 0 ? (
                          <TooltipProvider>
                             <ul className="space-y-4">
-                                {appointments.map(app => (
+                                {pendingAppointments.map(app => (
                                     <li key={app.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-md gap-4">
                                         <div className="flex-grow">
                                             <div className="flex items-center gap-2">
@@ -298,9 +339,6 @@ export default function PendingAppointmentsPage() {
                                             <Button size="icon" variant="outline" onClick={() => handleViewHistory(app.clientId, app.clientName)} disabled={isProcessing}>
                                                 <FileText className="h-4 w-4" />
                                             </Button>
-                                            <Button size="icon" variant="outline" disabled={isProcessing}>
-                                                <ThumbsUp className="h-4 w-4" />
-                                            </Button>
                                             <Button size="icon" className="bg-green-500 hover:bg-green-600" onClick={() => handleApprove(app.id)} disabled={isProcessing}>
                                                 {isProcessing ? <Loader2 className="animate-spin" /> : <Check className="h-4 w-4" />}
                                             </Button>
@@ -313,6 +351,56 @@ export default function PendingAppointmentsPage() {
                         <div className="text-center text-muted-foreground py-16">
                             <p className="text-lg">אין תורים הממתינים לאישור כרגע.</p>
                             <p>כל הכבוד, יישר כוח!</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <AlertCircle className="text-yellow-500" />
+                        בקשות לביטול תור
+                    </CardTitle>
+                    <CardDescription>אשר או דחה בקשות ביטול מלקוחות.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isLoading ? (
+                        <div className="flex justify-center items-center h-48">
+                            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                        </div>
+                    ) : cancellationRequests.length > 0 ? (
+                         <TooltipProvider>
+                            <ul className="space-y-4">
+                                {cancellationRequests.map(app => (
+                                    <li key={app.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-md gap-4 bg-yellow-50 border-yellow-200">
+                                        <div className="flex-grow">
+                                            <p className="font-bold text-lg">{app.clientName}</p>
+                                            <div className="text-sm text-muted-foreground mt-1">
+                                                <span>{app.serviceName}</span>
+                                                <span className="mx-2">|</span>
+                                                <span>{format(new Date(app.start), 'eeee, d MMMM yyyy', { locale: he })}</span>
+                                                <span className="mx-2">|</span>
+                                                <span>{format(new Date(app.start), 'HH:mm')}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 self-end sm:self-center">
+                                            <Button size="sm" variant="outline" onClick={() => handleRejectCancellation(app.id)} disabled={isProcessing}>
+                                                <X className="ml-1 h-4 w-4" />
+                                                דחה ביטול
+                                            </Button>
+                                            <Button size="sm" variant="destructive" onClick={() => handleApproveCancellation(app.id)} disabled={isProcessing}>
+                                                {isProcessing ? <Loader2 className="animate-spin" /> : <Check className="ml-1 h-4 w-4" />}
+                                                אשר ביטול
+                                            </Button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </TooltipProvider>
+                    ) : (
+                        <div className="text-center text-muted-foreground py-16">
+                            <p className="text-lg">אין בקשות ביטול הממתינות לאישור.</p>
                         </div>
                     )}
                 </CardContent>

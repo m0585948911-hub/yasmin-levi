@@ -4,7 +4,7 @@ import { collection, getDocs, query, where, addDoc, updateDoc, doc, deleteDoc, T
 import { db } from './firebase';
 import { getClientById } from './clients';
 
-export type AppointmentStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'no-show' | 'completed' | 'pending';
+export type AppointmentStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'no-show' | 'completed' | 'pending' | 'pending_cancellation';
 export type NotificationType = 'newAppointment' | 'dayBefore' | 'timeToLeave' | 'afterAppointment' | 'rejection';
 
 
@@ -219,7 +219,7 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
     try {
         const appointmentRef = doc(db, 'appointments', id);
         const dataToUpdate: Partial<AppointmentData> = { status };
-        if (status === 'cancelled' && cancelledBy) {
+        if ((status === 'cancelled' || status === 'pending_cancellation') && cancelledBy) {
             dataToUpdate.cancelledBy = cancelledBy;
         }
         await updateDoc(appointmentRef, dataToUpdate as any);

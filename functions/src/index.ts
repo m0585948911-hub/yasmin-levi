@@ -269,6 +269,42 @@ export const onAppointmentWritten = functions.firestore.document("/appointments/
             await sendPushNotification(clientId, 'clients', title, body, { route: '/my-appointments', appointmentId });
             await enqueueWhatsAppMessage(dedupeKey, 'appointmentCancelled', variables, { clientId, title, body, data: { route: '/my-appointments', appointmentId } });
         }
+
+        // 4. Appointment Cancellation Request by Client
+        else if (dataBefore?.status !== 'pending_cancellation' && dataAfter?.status === 'pending_cancellation') {
+            functions.logger.info(`Appointment ${appointmentId} cancellation requested by client. Notifying admin.`);
+            try {
+                // Get all users with permission to approve appointments
+                const usersSnapshot = await db.collection('users')
+                    .where('permission', 'in', ['owner', 'developer', 'employee'])
+                    .get();
+                
+                const userIdsToNotify: string[] = [];
+                usersSnapshot.forEach(doc => {
+                    const user = doc.data();
+                    if (user.permission === 'owner' || user.permission === 'developer' || user.isSuperAdmin) {
+                        userIdsToNotify.push(doc.id);
+                    } else if (user.permission === 'employee' && user.employeePermissions?.canCancelAppointments) {
+                        userIdsToNotify.push(doc.id);
+                    }
+                });
+
+                const notificationPromises = userIdsToNotify.map(userId => 
+                    sendPushNotification(
+                        userId,
+                        'users',
+                        'בקשה לביטול תור',
+                        `הלקוח/ה ${dataAfter.clientName} מבקש/ת לבטל תור.`,
+                        { route: '/admin/appointments/pending' }
+                    )
+                );
+                
+                await Promise.all(notificationPromises);
+                
+            } catch (error) {
+                functions.logger.error("Error sending cancellation request notification to admin:", error);
+            }
+        }
     });
 
 

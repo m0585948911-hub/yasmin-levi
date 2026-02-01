@@ -1093,6 +1093,7 @@ const AppointmentFormDialog = ({
         const hasCollision = allAppointments.some(app => {
             if (app.id === appointmentIdToIgnore) return false;
             if (app.calendarId !== calendarId) return false;
+            if (app.status === 'cancelled') return false; // Ignore cancelled appointments
             const existingStart = new Date(app.start);
             const existingEnd = new Date(app.end);
             return startDateTime < existingEnd && endDateTime > existingStart;
@@ -1899,6 +1900,7 @@ function CalendarComponent() {
             const dayKey = format(day, 'yyyy-MM-dd');
             const dayAppointments = appointments
                 .filter(app => format(new Date(app.start), 'yyyy-MM-dd') === dayKey)
+                .filter(app => app.status !== 'cancelled')
                 .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
             if (dayAppointments.length === 0) {
@@ -2118,7 +2120,8 @@ function CalendarComponent() {
                                                     onClick={() => handleAppointmentClick(app)}
                                                     className={cn(
                                                         "absolute p-1 rounded-md text-xs overflow-hidden border border-primary/50 text-right flex flex-col",
-                                                        app.status === 'pending' && 'opacity-60 border-dashed border-orange-500'
+                                                        app.status === 'pending' && 'opacity-60 border-dashed border-orange-500',
+                                                        app.status === 'pending_cancellation' && 'opacity-50 line-through'
                                                     )}
                                                     style={{ 
                                                         ...backgroundStyle,

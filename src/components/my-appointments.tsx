@@ -82,24 +82,24 @@ function MyAppointmentsContent() {
     
     const handleCancelAppointment = (appointment: Appointment) => {
         startCancelTransition(async () => {
-            const result = await updateAppointmentStatus(appointment.id, 'cancelled', 'client');
+            const result = await updateAppointmentStatus(appointment.id, 'pending_cancellation', 'client');
             if (result.success) {
                 await createLog({
-                    action: 'Appointment Cancelled by Client',
-                    details: `Appointment for ${appointment.clientName} for ${appointment.serviceName} on ${format(new Date(appointment.start), 'dd/MM/yyyy HH:mm')} was cancelled.`,
+                    action: 'Appointment Cancellation Requested',
+                    details: `Client ${appointment.clientName} requested to cancel appointment on ${format(new Date(appointment.start), 'dd/MM/yyyy HH:mm')}.`,
                     user: appointment.clientName,
                 });
                 
                 toast({
-                    title: "התור בוטל בהצלחה",
-                    description: "התור שלך הוסר מהיומן.",
+                    title: "בקשתך לביטול התור נשלחה",
+                    description: "המנהל/ת יאשרו את הביטול בהקדם.",
                 });
-                setFutureAppointments(prev => prev.filter(a => a.id !== appointment.id));
+                setFutureAppointments(prev => prev.map(a => a.id === appointment.id ? { ...a, status: 'pending_cancellation' } : a));
             } else {
                  toast({
                     variant: "destructive",
                     title: "שגיאה",
-                    description: "לא ניתן היה לבטל את התור. נא לנסות שוב.",
+                    description: "לא ניתן היה לשלוח את בקשת הביטול. נא לנסות שוב.",
                 });
             }
         });
@@ -207,6 +207,7 @@ function MyAppointmentsContent() {
                                 const canCancel = hoursUntilAppointment >= cancelHoursLimit;
                                 const canEdit = hoursUntilAppointment >= editHoursLimit;
                                 const isPending = app.status === 'pending';
+                                const isPendingCancellation = app.status === 'pending_cancellation';
 
                                 return (
                                 <li key={app.id}>
@@ -217,6 +218,11 @@ function MyAppointmentsContent() {
                                                 <Badge variant="outline" className="border-orange-500 text-orange-500">
                                                     <AlertCircle className="ml-1 h-3 w-3" />
                                                     ממתין לאישור
+                                                </Badge>
+                                             ) : isPendingCancellation ? (
+                                                <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                                                    <AlertCircle className="ml-1 h-3 w-3" />
+                                                    בבקשת ביטול
                                                 </Badge>
                                              ) : (
                                                 <Badge variant="outline" className="border-green-500 text-green-500">
@@ -235,7 +241,7 @@ function MyAppointmentsContent() {
                                         </div>
                                         <Separator />
                                         <div className="flex justify-end gap-2 items-center">
-                                            {isArrivalConfirmationActive && !isPending && (
+                                            {isArrivalConfirmationActive && !isPending && !isPendingCancellation && (
                                                 <div className="flex-grow">
                                                     {app.arrivalConfirmed ? (
                                                         <div className="flex items-center gap-1 text-sm text-green-600 font-semibold">
@@ -257,15 +263,14 @@ function MyAppointmentsContent() {
                                             )}
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
-                                                    <Button variant="outline" size="sm" disabled={isPending}>ביטול תור</Button>
+                                                    <Button variant="outline" size="sm" disabled={isPending || isPendingCancellation}>ביטול תור</Button>
                                                 </AlertDialogTrigger>
                                                 {canCancel ? (
                                                     <AlertDialogContent>
                                                         <AlertDialogHeader>
                                                             <AlertDialogTitle>רגע לפני שמבטלים...</AlertDialogTitle>
                                                             <AlertDialogDescription>
-                                                                 האם לבטל את התור? שימ/י לב, הפעולה סופית ואינה ניתנת לשחזור. 
-                                                                 ביטול התור ישחרר את המקום ביומן ללקוחות אחרים.
+                                                                 האם לשלוח בקשה לביטול התור? שימ/י לב, הפעולה תמתין לאישור המנהל.
                                                             </AlertDialogDescription>
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
@@ -275,7 +280,7 @@ function MyAppointmentsContent() {
                                                                 disabled={isCancelling}
                                                                 className="bg-destructive hover:bg-destructive/90"
                                                             >
-                                                                 {isCancelling ? <Loader2 className="animate-spin" /> : 'כן, לבטל את התור'}
+                                                                 {isCancelling ? <Loader2 className="animate-spin" /> : 'כן, שלח/י בקשה לביטול'}
                                                             </AlertDialogAction>
                                                         </AlertDialogFooter>
                                                     </AlertDialogContent>
@@ -303,7 +308,7 @@ function MyAppointmentsContent() {
                                                 )}
                                             </AlertDialog>
                                              {canEdit ? (
-                                                <Button asChild variant="default" size="sm" disabled={isPending}>
+                                                <Button asChild variant="default" size="sm" disabled={isPending || isPendingCancellation}>
                                                     <Link href={`${newAppointmentLink}&changeAppointmentId=${app.id}&serviceIds=${app.serviceId}`}>
                                                         שינוי תור
                                                     </Link>
@@ -311,7 +316,7 @@ function MyAppointmentsContent() {
                                              ) : (
                                                 <AlertDialog>
                                                     <AlertDialogTrigger asChild>
-                                                        <Button variant="default" size="sm" disabled={isPending}>שינוי תור</Button>
+                                                        <Button variant="default" size="sm" disabled={isPending || isPendingCancellation}>שינוי תור</Button>
                                                     </AlertDialogTrigger>
                                                     <AlertDialogContent>
                                                         <AlertDialogHeader>
