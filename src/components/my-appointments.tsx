@@ -61,7 +61,10 @@ function MyAppointmentsContent() {
                 .filter(app => app.clientId === clientId);
                 
             const now = new Date();
-            const future = clientAppointments.filter(a => new Date(a.start) >= now).sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+            const future = clientAppointments
+                .filter(a => new Date(a.start) >= now && a.status !== 'cancelled' && a.status !== 'no-show' && a.status !== 'completed')
+                .sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+            
             const past = clientAppointments.filter(a => new Date(a.start) < now).sort((a,b) => new Date(b.start).getTime() - new Date(a.start).getTime());
 
             setFutureAppointments(future);

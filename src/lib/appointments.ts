@@ -3,6 +3,7 @@
 import { collection, getDocs, query, where, addDoc, updateDoc, doc, deleteDoc, Timestamp, writeBatch, getDoc, orderBy, limit as firestoreLimit, QueryConstraint } from 'firebase/firestore';
 import { db } from './firebase';
 import { getClientById } from './clients';
+import { revalidatePath } from 'next/cache';
 
 export type AppointmentStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'no-show' | 'completed' | 'pending' | 'pending_cancellation';
 export type NotificationType = 'newAppointment' | 'dayBefore' | 'timeToLeave' | 'afterAppointment' | 'rejection';
@@ -223,6 +224,11 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
             dataToUpdate.cancelledBy = cancelledBy;
         }
         await updateDoc(appointmentRef, dataToUpdate as any);
+        
+        revalidatePath('/admin/calendar');
+        revalidatePath('/my-appointments');
+        revalidatePath('/admin/appointments/pending');
+        
         return { success: true };
     } catch (error) {
         console.error("Error updating appointment status:", error);
