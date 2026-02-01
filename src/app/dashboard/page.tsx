@@ -642,7 +642,14 @@ function DashboardContent() {
         
         <div className="my-4 text-center">
           <button
-            onClick={() => testLocalNotification()}
+            onClick={async () => {
+              const ok = await testLocalNotification();
+              if (!ok) {
+                alert('ההתראות זמינות רק באפליקציה (Android/iOS) או שהרשאה חסומה.');
+              } else {
+                alert('נשלחה התראה ✅ בדוק למעלה במסך');
+              }
+            }}
             style={{ padding: 12, border: '1px solid #ccc', borderRadius: 8 }}
           >
             Test Local Notification
