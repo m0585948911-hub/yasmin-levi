@@ -18,10 +18,10 @@ import { Loader2, ArrowLeft, Camera, Save, X, Bell } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logo } from './logo';
 import { registerPushToken } from '@/lib/push';
 import { BirthDateSelector } from './birth-date-selector';
+import { Switch } from './ui/switch';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(2, 'שם פרטי חייב להכיל לפחות 2 תווים'),
@@ -29,6 +29,11 @@ const profileFormSchema = z.object({
   email: z.string().email('כתובת אימייל לא תקינה').optional().or(z.literal('')),
   gender: z.enum(['male', 'female']),
   birthDate: z.date().optional(),
+  notificationSettings: z.object({
+    appointmentManagement: z.boolean(),
+    marketing: z.boolean(),
+    system: z.boolean(),
+  }),
 });
 
 export function ProfileForm({ title = "פרופיל והגדרות" }: { title?: string }) {
@@ -52,6 +57,11 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
       lastName: '',
       email: '',
       gender: 'female',
+      notificationSettings: {
+        appointmentManagement: true,
+        marketing: true,
+        system: true,
+      }
     }
   });
 
@@ -77,6 +87,11 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
           email: fetchedClient.email || '',
           gender: fetchedClient.gender,
           birthDate: fetchedClient.birthDate ? new Date(fetchedClient.birthDate) : undefined,
+          notificationSettings: {
+            appointmentManagement: fetchedClient.notificationSettings?.appointmentManagement ?? true,
+            marketing: fetchedClient.notificationSettings?.marketing ?? true,
+            system: fetchedClient.notificationSettings?.system ?? true,
+          }
         });
         setAvatarPreview(fetchedClient.avatarUrl || null);
       } else {
@@ -111,6 +126,9 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
       formData.append('gender', values.gender);
       if (values.birthDate) {
         formData.append('birthDate', values.birthDate.toISOString());
+      }
+      if (values.notificationSettings) {
+        formData.append('notificationSettings', JSON.stringify(values.notificationSettings));
       }
       if (avatarPreview) {
         formData.append('avatarUrl', avatarPreview);
@@ -159,6 +177,11 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
         email: client.email || '',
         gender: client.gender,
         birthDate: client.birthDate ? new Date(client.birthDate) : undefined,
+        notificationSettings: {
+            appointmentManagement: client.notificationSettings?.appointmentManagement ?? true,
+            marketing: client.notificationSettings?.marketing ?? true,
+            system: client.notificationSettings?.system ?? true,
+        },
     });
     setAvatarPreview(client.avatarUrl || null);
     setIsEditing(false);
@@ -329,19 +352,67 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
         <CardHeader>
             <CardTitle className="flex items-center gap-2"><Bell /> הגדרות התראות</CardTitle>
         </CardHeader>
-        <CardContent>
-            {notificationPermission === 'granted' && (
-                <p className="text-sm text-green-600">התראות מופעלות עבור דפדפן זה.</p>
-            )}
-             {notificationPermission === 'denied' && (
+        <CardContent className="space-y-4">
+            {notificationPermission === 'granted' ? (
+                <p className="text-sm text-green-600">התראות מופעלות עבור מכשיר זה.</p>
+            ) : notificationPermission === 'denied' ? (
                 <div className="text-sm text-destructive">
-                    <p>התראות חסומות. כדי לקבל תזכורות ועדכונים, יש לאפשר אותן בהגדרות הדפדפן עבור אתר זה.</p>
+                    <p>התראות חסומות. כדי לקבל עדכונים, יש לאפשר אותן בהגדרות המכשיר עבור האפליקציה.</p>
                 </div>
-            )}
-             {notificationPermission === 'default' && (
+            ) : (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
                     <p className="text-sm text-muted-foreground">קבל/י תזכורות על תורים ועדכונים חשובים.</p>
                     <Button onClick={handleRequestNotificationPermission} variant="outline" size="sm">הפעל התראות</Button>
+                </div>
+            )}
+            
+            {isEditing && (
+                <div className="space-y-3 pt-4 border-t">
+                    <FormField
+                        control={form.control}
+                        name="notificationSettings.appointmentManagement"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                    <FormLabel>ניהול תורים</FormLabel>
+                                    <FormDescription className="text-xs">אישור, ביטול, שינוי ותזכורות לתורים.</FormDescription>
+                                </div>
+                                <FormControl>
+                                    <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                                </FormControl>
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="notificationSettings.marketing"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                    <FormLabel>פרסומות ומבצעים</FormLabel>
+                                    <FormDescription className="text-xs">עדכונים על הנחות ומבצעים מיוחדים.</FormDescription>
+                                </div>
+                                <FormControl>
+                                    <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                                </FormControl>
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="notificationSettings.system"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                <div className="space-y-0.5">
+                                    <FormLabel>התראות מערכת</FormLabel>
+                                    <FormDescription className="text-xs">הודעות כלליות וחשובות מהעסק.</FormDescription>
+                                </div>
+                                <FormControl>
+                                    <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                                </FormControl>
+                            </FormItem>
+                        )}
+                    />
                 </div>
             )}
         </CardContent>

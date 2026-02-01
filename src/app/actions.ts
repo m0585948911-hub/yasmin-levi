@@ -3,7 +3,7 @@
 
 import { redirect } from 'next/navigation';
 import { createLog } from '@/lib/logs';
-import { findClientByPhone, saveClient, Client, getClientById } from '@/lib/clients';
+import { findClientByPhone, saveClient, Client, getClientById, ClientNotificationSettings } from '@/lib/clients';
 import { revalidatePath } from 'next/cache';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -97,7 +97,7 @@ export async function updateProfile(formData: FormData) {
      return { error: 'Client not found.' };
   }
 
-  const dataToUpdate: Partial<Omit<Client, 'id' | 'createdAt' | 'updatedAt'>> = {
+  const dataToUpdate: Partial<Client> = {
     firstName: formData.get('firstName') as string,
     lastName: formData.get('lastName') as string,
     email: formData.get('email') as string,
@@ -107,6 +107,15 @@ export async function updateProfile(formData: FormData) {
   const birthDate = formData.get('birthDate') as string;
   if (birthDate) {
     dataToUpdate.birthDate = birthDate;
+  }
+
+  const notificationSettingsString = formData.get('notificationSettings') as string | null;
+  if (notificationSettingsString) {
+      try {
+          dataToUpdate.notificationSettings = JSON.parse(notificationSettingsString);
+      } catch (e) {
+          console.error("Failed to parse notificationSettings", e);
+      }
   }
 
 

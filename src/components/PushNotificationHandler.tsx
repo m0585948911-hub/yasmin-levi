@@ -1,11 +1,10 @@
 
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { registerPushToken } from '@/lib/push';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { getMessaging, onMessage } from 'firebase/messaging';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { PushNotifications, PushNotificationSchema, ActionPerformed } from '@capacitor/push-notifications';
@@ -19,7 +18,6 @@ export const PushNotificationHandler = () => {
     const router = useRouter();
     const clientId = searchParams.get('id');
     const { toast } = useToast();
-    const [showPermissionDialog, setShowPermissionDialog] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
     const initializePush = useCallback(async () => {
@@ -27,17 +25,16 @@ export const PushNotificationHandler = () => {
             await registerPushToken(clientId, 'clients');
         }
         localStorage.setItem(FCM_PERMISSION_KEY, 'true');
-        setShowPermissionDialog(false);
     }, [clientId]);
   
     useEffect(() => {
         if (!clientId) return;
         
         const permissionRequested = localStorage.getItem(FCM_PERMISSION_KEY);
-        if (!permissionRequested) {
-            const timer = setTimeout(() => setShowPermissionDialog(true), 5000);
-            return () => clearTimeout(timer);
-        } else {
+        // Only initialize push if permission has been requested before (either granted or denied)
+        // This prevents the automatic browser prompt on first load.
+        // The user can now grant permission from the settings page.
+        if (permissionRequested) {
             initializePush();
         }
     }, [clientId, initializePush]);
@@ -112,25 +109,6 @@ export const PushNotificationHandler = () => {
     }, [clientId, toast, router]);
   
     return (
-        <>
-            <audio ref={audioRef} src="https://firebasestorage.googleapis.com/v0/b/yasmin-beauty-diary.firebasestorage.app/o/MP3%2Fsound-email-received.mp3?alt=media&token=ba9b57a8-bfa9-4fb0-98a5-6290616479cf" preload="auto" />
-            <AlertDialog open={showPermissionDialog} onOpenChange={setShowPermissionDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>רוצה לקבל עדכונים?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            כדי שנוכל לשלוח לך תזכורות על תורים ועדכונים חשובים, נשמח לקבל את אישורך לקבלת התראות.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => {
-                            localStorage.setItem(FCM_PERMISSION_KEY, 'true'); // Don't ask again
-                            setShowPermissionDialog(false);
-                        }}>אולי בפעם אחרת</AlertDialogCancel>
-                        <AlertDialogAction onClick={initializePush}>כן, בטח!</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-        </AlertDialog>
-      </>
+        <audio ref={audioRef} src="https://firebasestorage.googleapis.com/v0/b/yasmin-beauty-diary.firebasestorage.app/o/MP3%2Fsound-email-received.mp3?alt=media&token=ba9b57a8-bfa9-4fb0-98a5-6290616479cf" preload="auto" />
   );
 };

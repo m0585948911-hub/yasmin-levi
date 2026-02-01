@@ -1,3 +1,4 @@
+
 'use server';
 
 import { collection, addDoc, getDocs, query, doc, updateDoc, deleteDoc, where, Timestamp, getDoc, limit, writeBatch } from 'firebase/firestore';
@@ -18,6 +19,12 @@ export interface ClientFlag {
     createdAtIso: string;
     lastChangedAtIso: string;
     source: 'client_form' | 'clinician' | 'system';
+}
+
+export interface ClientNotificationSettings {
+    appointmentManagement: boolean;
+    marketing: boolean;
+    system: boolean;
 }
 
 
@@ -49,6 +56,7 @@ export interface Client {
     stickyNote?: string;
     flagsSummary?: ClientFlag[];
     familyRelations?: FamilyRelation[];
+    notificationSettings?: ClientNotificationSettings;
 }
 
 export interface ClientData {
@@ -79,6 +87,7 @@ export interface ClientData {
     stickyNote?: string;
     flagsSummary?: ClientFlag[];
     familyRelations?: FamilyRelation[];
+    notificationSettings?: ClientNotificationSettings;
 }
 
 function toIso(date: any): string | null {
@@ -126,6 +135,7 @@ function toClient(id: string, data: any): Client {
     stickyNote: data.stickyNote ?? undefined,
     flagsSummary: Array.isArray(data.flagsSummary) ? data.flagsSummary : [],
     familyRelations: Array.isArray(data.familyRelations) ? data.familyRelations : [],
+    notificationSettings: data.notificationSettings,
 
 
     // ✅ תמיד plain
@@ -179,6 +189,7 @@ export async function saveClient(clientData: Omit<Client, 'id' | 'createdAt' | '
         businessId: businessId,
         updatedAt: Timestamp.now(),
         familyRelations: dataToSave.familyRelations || [],
+        notificationSettings: dataToSave.notificationSettings,
     };
 
     if (birthDate) {
