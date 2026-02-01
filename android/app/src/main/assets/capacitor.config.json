@@ -1,0 +1,9 @@
+{
+	"appId": "com.yasmin.admin",
+	"appName": "יסמין לוי ניהול",
+	"webDir": "out",
+	"server": {
+		"url": "https://studio--yasmin-beauty-diary.us-central1.hosted.app/admin/login",
+		"cleartext": true
+	}
+}

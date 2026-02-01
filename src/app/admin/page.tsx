@@ -25,6 +25,7 @@ import { getPendingAppointments } from "@/lib/appointments";
 import { getWaitingListRequests } from "@/lib/waiting-list";
 import { useAdminUser } from "@/hooks/use-admin-user";
 import { getReminders } from "@/lib/reminders";
+import { testLocalNotification } from '@/lib/client-notifications';
 
 
 export default function AdminDashboardPage() {
@@ -113,6 +114,14 @@ export default function AdminDashboardPage() {
       <div>
         <Greeting />
         <QuoteFlow />
+      </div>
+      <div className="my-4 text-center">
+        <button
+          onClick={() => testLocalNotification()}
+          style={{ padding: 12, border: '1px solid #ccc', borderRadius: 8 }}
+        >
+          Test Local Notification
+        </button>
       </div>
        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6 max-w-4xl mx-auto">
           {features.map(feature => <DashboardIcon key={feature.label} {...feature} />)}

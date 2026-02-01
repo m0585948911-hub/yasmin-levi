@@ -31,6 +31,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PushNotificationHandler } from "@/components/PushNotificationHandler";
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { testLocalNotification } from '@/lib/client-notifications';
 
 import { 
   CalendarPlus, 
@@ -637,6 +638,15 @@ function DashboardContent() {
         {gender && <ClientQuote gender={gender} />}
         <div className="grid grid-cols-4 gap-3 text-center mb-6 mt-4">
           {features.map(feature => <DashboardIcon key={feature.label} {...feature} />)}
+        </div>
+        
+        <div className="my-4 text-center">
+          <button
+            onClick={() => testLocalNotification()}
+            style={{ padding: 12, border: '1px solid #ccc', borderRadius: 8 }}
+          >
+            Test Local Notification
+          </button>
         </div>
 
         <div className="flex-grow overflow-y-auto">
