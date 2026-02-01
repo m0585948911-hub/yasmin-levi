@@ -31,7 +31,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PushNotificationHandler } from "@/components/PushNotificationHandler";
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { testLocalNotification } from '@/lib/client-notifications';
+import { sendPushToClient } from "@/lib/send-push";
 
 import { 
   CalendarPlus, 
@@ -641,19 +641,24 @@ function DashboardContent() {
         </div>
         
         <div className="my-4 text-center">
-          <button
-            onClick={async () => {
-              const ok = await testLocalNotification();
-              if (!ok) {
-                alert('ההתראות זמינות רק באפליקציה (Android/iOS) או שהרשאה חסומה.');
-              } else {
-                alert('נשלחה התראה ✅ בדוק למעלה במסך');
-              }
-            }}
-            style={{ padding: 12, border: '1px solid #ccc', borderRadius: 8 }}
-          >
-            Test Local Notification
-          </button>
+            <Button
+              onClick={async () => {
+                try {
+                  const res = await sendPushToClient({
+                    clientId: "TEST",
+                    title: "בדיקת PUSH",
+                    body: "אם הגעת ללוגים – עובד!",
+                  });
+                  console.log("sendPushToClient ok:", res);
+                  alert("נשלח (בדוק לוגים)");
+                } catch (e) {
+                  console.error("sendPushToClient failed:", e);
+                  alert("נכשל (בדוק Console)");
+                }
+              }}
+            >
+              בדיקת PUSH
+            </Button>
         </div>
 
         <div className="flex-grow overflow-y-auto">

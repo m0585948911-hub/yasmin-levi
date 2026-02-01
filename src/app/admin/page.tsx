@@ -25,7 +25,8 @@ import { getPendingAppointments } from "@/lib/appointments";
 import { getWaitingListRequests } from "@/lib/waiting-list";
 import { useAdminUser } from "@/hooks/use-admin-user";
 import { getReminders } from "@/lib/reminders";
-import { testLocalNotification } from '@/lib/client-notifications';
+import { Button } from "@/components/ui/button";
+import { sendPushToClient } from "@/lib/send-push";
 
 
 export default function AdminDashboardPage() {
@@ -116,19 +117,24 @@ export default function AdminDashboardPage() {
         <QuoteFlow />
       </div>
       <div className="my-4 text-center">
-        <button
+        <Button
           onClick={async () => {
-            const ok = await testLocalNotification();
-            if (!ok) {
-              alert('ההתראות זמינות רק באפליקציה (Android/iOS) או שהרשאה חסומה.');
-            } else {
-              alert('נשלחה התראה ✅ בדוק למעלה במסך');
+            try {
+              const res = await sendPushToClient({
+                clientId: "TEST",
+                title: "בדיקת PUSH",
+                body: "אם הגעת ללוגים – עובד!",
+              });
+              console.log("sendPushToClient ok:", res);
+              alert("נשלח (בדוק לוגים)");
+            } catch (e) {
+              console.error("sendPushToClient failed:", e);
+              alert("נכשל (בדוק Console)");
             }
           }}
-          style={{ padding: 12, border: '1px solid #ccc', borderRadius: 8 }}
         >
-          Test Local Notification
-        </button>
+          בדיקת PUSH
+        </Button>
       </div>
        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6 max-w-4xl mx-auto">
           {features.map(feature => <DashboardIcon key={feature.label} {...feature} />)}
