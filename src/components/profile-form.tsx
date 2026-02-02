@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -143,14 +144,13 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
     });
   };
 
-  // ✅ מתוקן: בלי פרמטר שני + עם await
   const handleRequestNotificationPermission = () => {
     Notification.requestPermission().then(async (permission) => {
       setNotificationPermission(permission);
 
       if (permission === 'granted') {
         if (clientId) {
-          await registerPushToken(clientId); // ✅ כאן התיקון
+          await registerPushToken(clientId, 'clients');
           toast({ title: 'הצלחה', description: 'התראות הופעלו. תקבל/י מאיתנו עדכונים חשובים.' });
         }
       } else {
@@ -399,3 +399,5 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
     </div>
   );
 }
+
+    
