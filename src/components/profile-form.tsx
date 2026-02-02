@@ -48,7 +48,6 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
 
-  
   const form = useForm<z.infer<typeof profileFormSchema>>({
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
@@ -105,16 +104,16 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setAvatarPreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     } else {
-        toast({ variant: "destructive", title: "שגיאה", description: "יש לבחור קובץ תמונה בלבד." });
+      toast({ variant: "destructive", title: "שגיאה", description: "יש לבחור קובץ תמונה בלבד." });
     }
   };
-  
+
   const onSubmit = (values: z.infer<typeof profileFormSchema>) => {
     startTransition(async () => {
       const formData = new FormData();
@@ -137,27 +136,32 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
       if (result.success) {
         toast({ title: 'הצלחה!', description: 'הפרופיל וההגדרות עודכנו בהצלחה.' });
         router.push(`/dashboard?${result.newParams}`);
-        router.refresh(); // Refresh to ensure dashboard shows updated info
+        router.refresh();
       } else {
         toast({ variant: 'destructive', title: 'שגיאה', description: result.error });
       }
     });
   };
-  
-  const handleRequestNotificationPermission = () => {
-    Notification.requestPermission().then(permission => {
-        setNotificationPermission(permission);
-        if (permission === 'granted') {
-            if (clientId) {
-                registerPushToken(clientId, 'clients');
-                toast({ title: 'הצלחה', description: 'התראות הופעלו. תקבל/י מאיתנו עדכונים חשובים.' });
-            }
-        } else {
-             toast({ variant: 'destructive', title: 'שימ/י לב', description: 'אינך אישרת קבלת התראות. כדי לקבל עדכונים, יש לאפשר אותן בהגדרות הדפדפן.' });
-        }
-    });
-  }
 
+  // ✅ מתוקן: בלי פרמטר שני + עם await
+  const handleRequestNotificationPermission = () => {
+    Notification.requestPermission().then(async (permission) => {
+      setNotificationPermission(permission);
+
+      if (permission === 'granted') {
+        if (clientId) {
+          await registerPushToken(clientId); // ✅ כאן התיקון
+          toast({ title: 'הצלחה', description: 'התראות הופעלו. תקבל/י מאיתנו עדכונים חשובים.' });
+        }
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'שימ/י לב',
+          description: 'אינך אישרת קבלת התראות. כדי לקבל עדכונים, יש לאפשר אותן בהגדרות הדפדפן.'
+        });
+      }
+    });
+  };
 
   const dashboardLink = `/dashboard?${searchParams.toString()}`;
 
@@ -173,18 +177,18 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
     <div className="container mx-auto p-4 max-w-lg">
       <header className="p-4 flex justify-between items-center mb-6">
         <Link href={dashboardLink} className="w-20 h-20">
-            <Logo className="w-full h-full" />
+          <Logo className="w-full h-full" />
         </Link>
         <div className="text-center">
-            <h1 className="text-2xl font-bold text-primary">{title}</h1>
+          <h1 className="text-2xl font-bold text-primary">{title}</h1>
         </div>
         <div className="w-20 flex items-center justify-center">
-            <Button asChild variant="outline">
-                <Link href={dashboardLink}>
-                    <ArrowLeft className="ml-2" />
-                    חזרה
-                </Link>
-            </Button>
+          <Button asChild variant="outline">
+            <Link href={dashboardLink}>
+              <ArrowLeft className="ml-2" />
+              חזרה
+            </Link>
+          </Button>
         </div>
       </header>
 
@@ -193,22 +197,23 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardHeader>
               <div className="flex flex-col items-center gap-4">
-                 <div className="relative">
+                <div className="relative">
                   <Avatar className="w-24 h-24">
                     <AvatarImage src={avatarPreview || ''} alt={`${client.firstName} ${client.lastName}`} />
                     <AvatarFallback>{client.firstName.charAt(0)}{client.lastName.charAt(0)}</AvatarFallback>
                   </Avatar>
-                    <label htmlFor="avatar-upload" className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground rounded-full p-2 cursor-pointer hover:bg-primary/90 transition-colors">
-                        <Camera className="w-4 h-4" />
-                        <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={isPending} />
-                    </label>
+                  <label htmlFor="avatar-upload" className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground rounded-full p-2 cursor-pointer hover:bg-primary/90 transition-colors">
+                    <Camera className="w-4 h-4" />
+                    <input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={isPending} />
+                  </label>
                 </div>
                 <div className="text-center">
-                    <CardTitle>{client.firstName} {client.lastName}</CardTitle>
-                    <CardDescription>חבר/ה מאז {new Date(client.createdAt).toLocaleDateString('he-IL')}</CardDescription>
+                  <CardTitle>{client.firstName} {client.lastName}</CardTitle>
+                  <CardDescription>חבר/ה מאז {new Date(client.createdAt).toLocaleDateString('he-IL')}</CardDescription>
                 </div>
               </div>
             </CardHeader>
+
             <CardContent className="space-y-4">
               <FormField
                 control={form.control}
@@ -223,6 +228,7 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="lastName"
@@ -236,11 +242,13 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
                   </FormItem>
                 )}
               />
+
               <FormItem>
                 <FormLabel>טלפון</FormLabel>
                 <Input value={client.phone} disabled />
               </FormItem>
-               <FormField
+
+              <FormField
                 control={form.control}
                 name="email"
                 render={({ field }) => (
@@ -253,132 +261,138 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="gender"
                 render={({ field }) => (
-                    <FormItem className="space-y-3">
+                  <FormItem className="space-y-3">
                     <FormLabel>מין</FormLabel>
                     <FormControl>
-                        <RadioGroup
+                      <RadioGroup
                         onValueChange={field.onChange}
                         value={field.value}
                         className="flex flex-row space-x-4"
                         dir="rtl"
                         disabled={isPending}
-                        >
+                      >
                         <FormItem className="flex items-center space-x-2 space-x-reverse">
-                            <FormControl>
+                          <FormControl>
                             <RadioGroupItem value="female" id="female" />
-                            </FormControl>
-                            <FormLabel htmlFor="female" className="font-normal">
+                          </FormControl>
+                          <FormLabel htmlFor="female" className="font-normal">
                             נקבה
-                            </FormLabel>
+                          </FormLabel>
                         </FormItem>
+
                         <FormItem className="flex items-center space-x-2 space-x-reverse">
-                            <FormControl>
+                          <FormControl>
                             <RadioGroupItem value="male" id="male" />
-                            </FormControl>
-                            <FormLabel htmlFor="male" className="font-normal">
+                          </FormControl>
+                          <FormLabel htmlFor="male" className="font-normal">
                             זכר
-                            </FormLabel>
+                          </FormLabel>
                         </FormItem>
-                        </RadioGroup>
+                      </RadioGroup>
                     </FormControl>
                     <FormMessage />
-                    </FormItem>
+                  </FormItem>
                 )}
-                />
-                 <FormField
-                    control={form.control}
-                    name="birthDate"
-                    render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                            <FormLabel>תאריך לידה</FormLabel>
-                            <FormControl>
-                                <BirthDateSelector
-                                    value={field.value}
-                                    onChange={field.onChange}
-                                    disabled={isPending}
-                                />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                
-                <Separator className="my-6" />
+              />
 
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2"><Bell /> הגדרות התראות</h3>
-                  {notificationPermission === 'granted' ? (
-                      <p className="text-sm text-green-600">התראות מופעלות עבור מכשיר זה.</p>
-                  ) : notificationPermission === 'denied' ? (
-                      <div className="text-sm text-destructive">
-                          <p>התראות חסומות. כדי לקבל עדכונים, יש לאפשר אותן בהגדרות המכשיר עבור האפליקציה.</p>
-                      </div>
-                  ) : (
-                      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 border rounded-md">
-                          <p className="text-sm text-muted-foreground">קבל/י תזכורות על תורים ועדכונים חשובים.</p>
-                          <Button type="button" onClick={handleRequestNotificationPermission} variant="outline" size="sm">הפעל התראות</Button>
-                      </div>
-                  )}
+              <FormField
+                control={form.control}
+                name="birthDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>תאריך לידה</FormLabel>
+                    <FormControl>
+                      <BirthDateSelector value={field.value} onChange={field.onChange} disabled={isPending} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                  <div className="space-y-3 pt-4 border-t">
-                      <FormField
-                          control={form.control}
-                          name="notificationSettings.appointmentManagement"
-                          render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                  <div className="space-y-0.5">
-                                      <FormLabel>ניהול תורים</FormLabel>
-                                      <FormDescription className="text-xs">אישור, ביטול, שינוי ותזכורות לתורים.</FormDescription>
-                                  </div>
-                                  <FormControl>
-                                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
-                                  </FormControl>
-                              </FormItem>
-                          )}
-                      />
-                      <FormField
-                          control={form.control}
-                          name="notificationSettings.marketing"
-                          render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                  <div className="space-y-0.5">
-                                      <FormLabel>פרסומות ומבצעים</FormLabel>
-                                      <FormDescription className="text-xs">עדכונים על הנחות ומבצעים מיוחדים.</FormDescription>
-                                  </div>
-                                  <FormControl>
-                                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
-                                  </FormControl>
-                              </FormItem>
-                          )}
-                      />
-                      <FormField
-                          control={form.control}
-                          name="notificationSettings.system"
-                          render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                  <div className="space-y-0.5">
-                                      <FormLabel>התראות מערכת</FormLabel>
-                                      <FormDescription className="text-xs">הודעות כלליות וחשובות מהעסק.</FormDescription>
-                                  </div>
-                                  <FormControl>
-                                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
-                                  </FormControl>
-                              </FormItem>
-                          )}
-                      />
+              <Separator className="my-6" />
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2"><Bell /> הגדרות התראות</h3>
+
+                {notificationPermission === 'granted' ? (
+                  <p className="text-sm text-green-600">התראות מופעלות עבור מכשיר זה.</p>
+                ) : notificationPermission === 'denied' ? (
+                  <div className="text-sm text-destructive">
+                    <p>התראות חסומות. כדי לקבל עדכונים, יש לאפשר אותן בהגדרות המכשיר עבור האפליקציה.</p>
                   </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 border rounded-md">
+                    <p className="text-sm text-muted-foreground">קבל/י תזכורות על תורים ועדכונים חשובים.</p>
+                    <Button type="button" onClick={handleRequestNotificationPermission} variant="outline" size="sm">
+                      הפעל התראות
+                    </Button>
+                  </div>
+                )}
+
+                <div className="space-y-3 pt-4 border-t">
+                  <FormField
+                    control={form.control}
+                    name="notificationSettings.appointmentManagement"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>ניהול תורים</FormLabel>
+                          <FormDescription className="text-xs">אישור, ביטול, שינוי ותזכורות לתורים.</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="notificationSettings.marketing"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>פרסומות ומבצעים</FormLabel>
+                          <FormDescription className="text-xs">עדכונים על הנחות ומבצעים מיוחדים.</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="notificationSettings.system"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>התראות מערכת</FormLabel>
+                          <FormDescription className="text-xs">הודעות כלליות וחשובות מהעסק.</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} disabled={isPending} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
                 </div>
+              </div>
             </CardContent>
-             <CardFooter className="flex justify-end gap-2 pt-4">
-                <Button type="submit" disabled={isPending} className="w-full">
-                  {isPending ? <Loader2 className="animate-spin" /> : <Save className="ml-2" />}
-                  שמור שינויים
-                </Button>
-              </CardFooter>
+
+            <CardFooter className="flex justify-end gap-2 pt-4">
+              <Button type="submit" disabled={isPending} className="w-full">
+                {isPending ? <Loader2 className="animate-spin" /> : <Save className="ml-2" />}
+                שמור שינויים
+              </Button>
+            </CardFooter>
+
           </form>
         </Form>
       </Card>
