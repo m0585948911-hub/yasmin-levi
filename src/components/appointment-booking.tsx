@@ -266,6 +266,17 @@ export function AppointmentBooking() {
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
+  
+  useEffect(() => {
+    if (view === 'calendar') {
+      const intervalId = setInterval(() => {
+        console.log("Refreshing appointments every 5 minutes...");
+        fetchAppointments();
+      }, 5 * 60 * 1000); // 5 minutes in milliseconds
+
+      return () => clearInterval(intervalId);
+    }
+  }, [view, fetchAppointments]);
 
 
   const handleServiceSelection = (service: Service, isSelected: boolean) => {
