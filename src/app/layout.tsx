@@ -33,7 +33,7 @@ export default function RootLayout({
         <AppThemeApplicator />
         {children}
         <Toaster />
-        <footer className="fixed bottom-0 left-0 right-0 p-2 text-center text-xs text-muted-foreground bg-background/80 backdrop-blur-sm z-50">
+        <footer className="fixed bottom-0 left-0 right-0 p-2 text-center text-xs text-muted-foreground bg-background border-t z-50">
           <p>פיתוח: יסמין לוי | גרסה: {APP_VERSION}</p>
         </footer>
       </body>

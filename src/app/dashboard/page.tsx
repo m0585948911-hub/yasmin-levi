@@ -267,7 +267,7 @@ function DashboardContent() {
             </Button>
         </div>
       </header>
-      <main className="container mx-auto px-4 pb-8 flex flex-col">
+      <main className="container mx-auto px-4 pb-20 flex flex-col">
         {gender && <ClientQuote gender={gender} />}
         <div className="grid grid-cols-4 gap-3 text-center mb-6 mt-4">
           {features.map(feature => <DashboardIcon key={feature.label} {...feature} />)}
@@ -279,7 +279,7 @@ function DashboardContent() {
             </div>
         </div>
       </main>
-      <footer className="sticky bottom-4 left-4 self-start">
+      <footer className="sticky bottom-10 left-4 self-start">
         <Button variant="outline" onClick={handleLogout}>
           <LogOut className="ml-2" />
           התנתקות
