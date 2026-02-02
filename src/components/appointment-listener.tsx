@@ -16,6 +16,9 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
+
 
 interface AppNotification {
   id: string;
@@ -60,11 +63,6 @@ export function AppointmentListener({ clientId }: { clientId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isInitialLoad = useRef(true);
-
-  // This effect for real-time appointment updates (e.g., from family members) remains.
-  // The polling effect for general notifications is removed.
-  // Real push notifications will be handled by PushNotificationHandler (foreground) 
-  // and the service worker (background).
 
   // Effect for appointments created by other users (e.g. family member)
   useEffect(() => {
@@ -122,10 +120,47 @@ export function AppointmentListener({ clientId }: { clientId: string }) {
     return () => unsubscribe();
   }, [clientId]);
 
+  // Effect for push notifications tapped by the user
+  useEffect(() => {
+    if (Capacitor.getPlatform() === 'web') return;
+
+    let listener: PluginListenerHandle;
+
+    const setupListener = async () => {
+        try {
+            await PushNotifications.removeAllListeners(); // Clean up previous listeners
+            listener = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+                console.log('Push action performed:', action);
+                const { title, body, data } = action.notification;
+                
+                const newNotification: AppNotification = {
+                  id: `push-${data.appointmentId || Date.now()}`,
+                  title: title || 'עדכון תור',
+                  content: body || 'פרטים חדשים על התור שלך זמינים באפליקציה.',
+                  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Arbitrary expiration
+                  createdAt: new Date(),
+                };
+
+                setNotification(newNotification);
+                setIsOpen(true);
+                audioRef.current?.play().catch(e => console.error("Audio play failed", e));
+            });
+        } catch(e) {
+            console.error("Failed to set up push notification listener", e);
+        }
+    }
+
+    setupListener();
+
+    return () => {
+      listener?.remove();
+    };
+
+  }, []);
+
   const handleConfirm = () => {
-    // Only redirect if the notification is about an appointment status change
-    const shouldRedirect = notification?.title.includes("אשר") || notification?.title.includes("נקבע");
-    if (shouldRedirect) {
+    const isAppointmentNotification = notification?.id.startsWith('new-appt-') || notification?.id.startsWith('push-');
+    if (isAppointmentNotification) {
         const params = new URLSearchParams(searchParams.toString());
         router.push(`/my-appointments?${params.toString()}`);
     }
@@ -133,6 +168,7 @@ export function AppointmentListener({ clientId }: { clientId: string }) {
     setNotification(null);
   };
   
+  const isAppointmentNotification = notification?.id.startsWith('new-appt-') || notification?.id.startsWith('push-');
 
   return (
     <>
@@ -155,7 +191,7 @@ export function AppointmentListener({ clientId }: { clientId: string }) {
                 </DialogHeader>
                 <DialogFooter>
                     <Button onClick={handleConfirm}>
-                        {notification.title.includes("אשר") || notification.title.includes("נקבע") ? "צפה בתורים שלי" : "הבנתי"}
+                        {isAppointmentNotification ? "צפה בתורים שלי" : "הבנתי"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -18,14 +18,14 @@ interface Device {
 // --- Helper Functions ---
 
 async function getTokensForEntity(entityId: string, entityType: 'clients' | 'users'): Promise<string[]> {
-    const subcollection = entityType === 'clients' ? 'pushTokens' : 'devices';
+    const subcollection = entityType === 'clients' ? 'devices' : 'devices'; // Both use 'devices' now
     const devicesSnapshot = await db.collection(entityType).doc(entityId).collection(subcollection).get();
 
     if (devicesSnapshot.empty) {
         return [];
     }
-    // For pushTokens, the doc ID is the token. For devices, it's in the data.
-    return devicesSnapshot.docs.map(doc => subcollection === 'pushTokens' ? doc.id : doc.data().token);
+    
+    return devicesSnapshot.docs.map(doc => doc.data().token);
 }
 
 
@@ -126,10 +126,22 @@ async function sendPushNotification(
         data,
         tokens: uniqueTokens,
         apns: {
-            payload: { aps: { sound: "default" } },
+            headers: {
+                'apns-priority': '10', // High priority for immediate display
+            },
+            payload: { 
+                aps: { 
+                    sound: "default",
+                    'content-available': 1 // Ensures app is woken up for background processing
+                } 
+            },
         },
         android: {
-            notification: { sound: "default" }
+            priority: 'high', // High priority
+            notification: { 
+                sound: "default",
+                channelId: "default_channel_id" // Target a specific channel
+            }
         }
     };
     
@@ -153,12 +165,16 @@ async function sendPushNotification(
 
             if (tokensToDelete.length > 0) {
                 functions.logger.info(`Deleting ${tokensToDelete.length} invalid tokens for ${entityType} ${entityId}.`);
-                const subcollection = entityType === 'clients' ? 'pushTokens' : 'devices';
+                const subcollection = 'devices'; // Both use 'devices' now
                 const batch = db.batch();
-                tokensToDelete.forEach(token => {
-                    const docRef = db.collection(entityType).doc(entityId).collection(subcollection).doc(token);
-                    batch.delete(docRef);
+                
+                // We need to find the device document by the token value to delete it.
+                const devicesRef = db.collection(entityType).doc(entityId).collection(subcollection);
+                const snapshot = await devicesRef.where('token', 'in', tokensToDelete).get();
+                snapshot.forEach(doc => {
+                    batch.delete(doc.ref);
                 });
+                
                 await batch.commit();
             }
         }
