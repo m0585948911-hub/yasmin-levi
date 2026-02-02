@@ -1,7 +1,7 @@
+
 "use server";
 
 import { adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
 
 type Platform = "web" | "android" | "ios";
 type EntityType = "clients" | "users";
@@ -21,7 +21,7 @@ export async function savePushTokenAction(params: {
   if (!entityId) throw new Error("Missing entityId");
   if (!entityType) throw new Error("Missing entityType");
 
-  const now = FieldValue.serverTimestamp();
+  const now = new Date();
 
   // ✅ stable-ish device id (server side)
   const deviceId =
@@ -69,15 +69,15 @@ export async function savePushTokenAction(params: {
             .collection("clients")
             .doc(entityId)
             .collection("pushTokens")
-            .doc(deviceId); // Using deviceId as doc ID as per original structure
+            .doc(token); // Using the token itself as the doc ID for legacy compatibility
 
         await legacyRef.set(
             {
-                token,
                 platform,
                 enabled: true,
                 lastSeenAt: now,
                 createdAt: now,
+                deviceId: deviceId, // cross-reference to the new 'devices' doc
             },
             { merge: true }
         );
@@ -86,3 +86,4 @@ export async function savePushTokenAction(params: {
 
   return { ok: true, deviceId };
 }
+
