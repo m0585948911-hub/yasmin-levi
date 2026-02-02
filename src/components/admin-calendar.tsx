@@ -1382,52 +1382,68 @@ const AppointmentFormDialog = ({
                            {!isPersonalEvent && (
                                 <>
                                     <Label htmlFor="client-search">לקוח:</Label>
-                                    <Popover open={isClientComboboxOpen} onOpenChange={setIsClientComboboxOpen}>
-                                        <PopoverTrigger asChild>
-                                            <Input
-                                                id="client-search"
-                                                placeholder="חיפוש שם, משפחה או טלפון..."
-                                                value={clientSearch}
-                                                onChange={(e) => {
-                                                    setClientSearch(e.target.value);
+                                    <div className="relative">
+                                        <Popover open={isClientComboboxOpen} onOpenChange={setIsClientComboboxOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Input
+                                                    id="client-search"
+                                                    placeholder="חיפוש שם, משפחה או טלפון..."
+                                                    value={clientSearch}
+                                                    onChange={(e) => {
+                                                        setClientSearch(e.target.value);
+                                                        setClientId(null);
+                                                        if (!isClientComboboxOpen) setIsClientComboboxOpen(true);
+                                                    }}
+                                                    className="w-full pl-8"
+                                                    disabled={!!appointmentToPlace || !!clientIdForNewAppointment}
+                                                />
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                                <Command>
+                                                    <CommandInput placeholder="חפש שם, משפחה או טלפון..." />
+                                                    <CommandList>
+                                                        <CommandEmpty>
+                                                            <Button variant="ghost" className="w-full justify-start" onClick={() => handleAddNewClient(clientSearch)}>
+                                                                <UserPlus className="mr-2 h-4 w-4" />
+                                                                הוסף לקוח חדש: "{clientSearch}"
+                                                            </Button>
+                                                        </CommandEmpty>
+                                                        <CommandGroup>
+                                                            {filteredClients.map((c) => (
+                                                                <CommandItem
+                                                                    key={c.id}
+                                                                    value={`${c.firstName} ${c.lastName} ${c.phone}`}
+                                                                    onSelect={() => {
+                                                                        setClientId(c.id);
+                                                                        setClientSearch(`${c.firstName} ${c.lastName}`);
+                                                                        setIsClientComboboxOpen(false);
+                                                                    }}
+                                                                >
+                                                                    <Check className={cn("mr-2 h-4 w-4", clientId === c.id ? "opacity-100" : "opacity-0")} />
+                                                                    {c.firstName} {c.lastName}
+                                                                    <span className="text-xs text-muted-foreground ml-auto">{c.phone}</span>
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
+                                        {clientId && !appointmentToPlace && !clientIdForNewAppointment && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                                                onClick={() => {
                                                     setClientId(null);
-                                                    if (!isClientComboboxOpen) setIsClientComboboxOpen(true);
+                                                    setClientSearch('');
                                                 }}
-                                                className="w-full"
-                                                disabled={!!appointmentToPlace || !!clientIdForNewAppointment}
-                                            />
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                            <Command>
-                                                <CommandInput placeholder="חפש שם, משפחה או טלפון..." />
-                                                <CommandList>
-                                                    <CommandEmpty>
-                                                        <Button variant="ghost" className="w-full justify-start" onClick={() => handleAddNewClient(clientSearch)}>
-                                                            <UserPlus className="mr-2 h-4 w-4" />
-                                                            הוסף לקוח חדש: "{clientSearch}"
-                                                        </Button>
-                                                    </CommandEmpty>
-                                                    <CommandGroup>
-                                                        {filteredClients.map((c) => (
-                                                            <CommandItem
-                                                                key={c.id}
-                                                                value={`${c.firstName} ${c.lastName} ${c.phone}`}
-                                                                onSelect={() => {
-                                                                    setClientId(c.id);
-                                                                    setClientSearch(`${c.firstName} ${c.lastName}`);
-                                                                    setIsClientComboboxOpen(false);
-                                                                }}
-                                                            >
-                                                                <Check className={cn("mr-2 h-4 w-4", clientId === c.id ? "opacity-100" : "opacity-0")} />
-                                                                {c.firstName} {c.lastName}
-                                                                <span className="text-xs text-muted-foreground ml-auto">{c.phone}</span>
-                                                            </CommandItem>
-                                                        ))}
-                                                    </CommandGroup>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
+                                            >
+                                                <X className="h-4 w-4 text-muted-foreground" />
+                                            </Button>
+                                        )}
+                                    </div>
                                     
                                     <Label htmlFor="service-search">סוג תור:</Label>
                                     <div className="space-y-2">
