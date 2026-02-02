@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getLatestNotification } from '@/lib/notifications';
 
 interface AppNotification {
   id: string;
@@ -62,49 +61,10 @@ export function AppointmentListener({ clientId }: { clientId: string }) {
   const searchParams = useSearchParams();
   const isInitialLoad = useRef(true);
 
-  // Separate effect for admin-generated notifications (approve/reject/general)
-  useEffect(() => {
-      const NOTIFICATION_CHECK_INTERVAL = 5000; // Check every 5 seconds
-      let intervalId: NodeJS.Timeout;
-      
-      const checkNotifications = async () => {
-          try {
-              if (document.hidden) return; // Don't check if tab is not active
-              
-              const lastSeenId = localStorage.getItem(`seenNotificationId_${clientId}`);
-              const latestNotification = await getLatestNotification(lastSeenId);
-
-              if (latestNotification) {
-                  const notificationWithDate = {
-                    ...latestNotification,
-                    expiresAt: new Date(latestNotification.expiresAt),
-                    createdAt: new Date(latestNotification.createdAt),
-                  };
-                  
-                  // Check if notification has expired
-                  if(notificationWithDate.expiresAt < new Date()) {
-                      // Mark as seen to prevent it from showing up again
-                      localStorage.setItem(`seenNotificationId_${clientId}`, notificationWithDate.id);
-                      return;
-                  }
-
-                  setNotification(notificationWithDate);
-                  setIsOpen(true);
-                  audioRef.current?.play().catch(e => console.error("Audio play failed", e));
-                  localStorage.setItem(`seenNotificationId_${clientId}`, notificationWithDate.id);
-              }
-          } catch (error) {
-              console.error("Error fetching notification:", error);
-          }
-      };
-
-      // Check immediately and then set interval
-      checkNotifications();
-      intervalId = setInterval(checkNotifications, NOTIFICATION_CHECK_INTERVAL);
-
-      return () => clearInterval(intervalId);
-  }, [clientId]);
-
+  // This effect for real-time appointment updates (e.g., from family members) remains.
+  // The polling effect for general notifications is removed.
+  // Real push notifications will be handled by PushNotificationHandler (foreground) 
+  // and the service worker (background).
 
   // Effect for appointments created by other users (e.g. family member)
   useEffect(() => {
