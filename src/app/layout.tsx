@@ -3,9 +3,7 @@ import './globals.css';
 import { AppThemeApplicator } from '@/components/app-theme-applicator';
 import { Toaster } from '@/components/ui/toaster';
 import { APP_VERSION } from '@/lib/version';
-
-// ✅ הוספנו import
-import PushNotificationHandler from '@/components/PushNotificationHandler';
+import PushNotificationHandlerWrapper from '@/components/PushNotificationHandlerWrapper';
 
 export const metadata: Metadata = {
   title: 'יסמין לוי',
@@ -35,14 +33,9 @@ export default function RootLayout({
     <html lang="he" dir="rtl">
       <body>
         <AppThemeApplicator />
-
-        {/* ✅ הפוש חייב לרוץ גלובלית */}
-        <PushNotificationHandler />
-
+        <PushNotificationHandlerWrapper />
         {children}
-
         <Toaster />
-
         <footer className="fixed bottom-0 left-0 right-0 p-2 text-center text-xs text-muted-foreground bg-background border-t z-50">
           <p>פיתוח: יסמין לוי | גרסה: {APP_VERSION}</p>
         </footer>
