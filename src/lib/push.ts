@@ -1,73 +1,94 @@
-
 'use client';
 
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, Token } from '@capacitor/push-notifications';
 import { getMessaging, getToken as getFCMToken } from "firebase/messaging";
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { getApp } from 'firebase/app';
+import { savePushTokenAction } from '@/app/actions/savePushTokenAction';
 
-
-async function saveTokenToFirestore(collectionPath: string, token: string) {
-    const platform = Capacitor.getPlatform();
-    // Use the token as the document ID for easy lookup and to prevent duplicates
-    const deviceRef = doc(db, collectionPath, token);
-    
+async function getWebToken(): Promise<string> {
     try {
-        await setDoc(deviceRef, {
-            token,
-            platform,
-            updatedAt: serverTimestamp(),
-        }, { merge: true });
-        console.log(`FCM token saved to Firestore at ${collectionPath}`);
-    } catch (error) {
-        console.error('Error saving FCM token to Firestore:', error);
+        const app = getApp();
+        const messaging = getMessaging(app);
+        const currentToken = await getFCMToken(messaging);
+        
+        if (currentToken) {
+            console.log('Web FCM Token received:', currentToken);
+            return currentToken;
+        } else {
+            throw new Error('No registration token available. Request permission to generate one.');
+        }
+    } catch (error: any) {
+        if (error.code === 'messaging/permission-blocked') {
+            console.warn('Notification permission was denied by the user.');
+        } else {
+            console.error('An error occurred while retrieving web token.', error);
+        }
+        throw error;
     }
 }
 
 
-export const registerPushToken = async (entityId: string, entityType: 'clients' | 'users') => {
-    const collectionPath = `${entityType}/${entityId}/devices`;
+function getNativeToken(): Promise<string | null> {
+    return new Promise(async (resolve, reject) => {
+        try {
+            await PushNotifications.requestPermissions().then(async result => {
+                if (result.receive === 'granted') {
+                    await PushNotifications.register();
+                } else {
+                    console.warn('Push notification permission not granted on native device.');
+                    resolve(null);
+                }
+            });
+
+            // This listener will be triggered when registration is successful
+            PushNotifications.addListener('registration', (token: Token) => {
+                console.log('Native Push registration success, token: ', token.value);
+                resolve(token.value);
+            });
+
+            PushNotifications.addListener('registrationError', (error: any) => {
+                console.error('Error on native registration: ', JSON.stringify(error));
+                reject(error);
+            });
+        } catch(e) {
+            reject(e);
+        }
+    });
+}
+
+
+/**
+ * Registers the device for push notifications (web or native) and saves the token to Firestore.
+ * This should be called after a user logs in and their `clientId` is available.
+ */
+export async function registerPushToken(clientId: string) {
+    if (!clientId) {
+        console.error("Cannot register push token without a clientId.");
+        return;
+    }
+
     const platform = Capacitor.getPlatform();
 
     if (platform === 'web') {
         try {
-            const app = getApp();
-            const messaging = getMessaging(app);
-            // Removed explicit vapidKey to rely on the service worker configuration
-            const currentToken = await getFCMToken(messaging);
-            
-            if (currentToken) {
-                console.log('Web FCM Token received:', currentToken);
-                await saveTokenToFirestore(collectionPath, currentToken);
-            } else {
-                console.log('No registration token available. Request permission to generate one.');
+            console.log("Registering for web push...");
+            const token = await getWebToken();
+            if (token) {
+                await savePushTokenAction({ clientId, token, platform: 'web' });
             }
-        } catch (error: any) {
-            if (error.code === 'messaging/permission-blocked') {
-                console.warn('Notification permission was denied by the user.');
-            } else {
-                console.error('An error occurred while retrieving web token.', error);
-            }
+        } catch (err) {
+            console.error('Web push registration failed', err);
         }
-    } else { // Native platforms
-        await PushNotifications.requestPermissions().then(async result => {
-            if (result.receive === 'granted') {
-                await PushNotifications.register();
-            } else {
-                console.warn('Push notification permission not granted on native device.');
+    } else { // android or ios
+        try {
+            console.log(`Registering for native push on ${platform}...`);
+            const token = await getNativeToken();
+            if (token) {
+                await savePushTokenAction({ clientId, token, platform: platform as 'android' | 'ios' });
             }
-        });
-
-        // This listener will be triggered when registration is successful
-        PushNotifications.addListener('registration', async (token: Token) => {
-            console.log('Native Push registration success, token: ', token.value);
-            await saveTokenToFirestore(collectionPath, token.value);
-        });
-
-        PushNotifications.addListener('registrationError', (error: any) => {
-            console.error('Error on native registration: ', JSON.stringify(error));
-        });
+        } catch (err) {
+            console.error('Native push registration failed', err);
+        }
     }
-};
+}

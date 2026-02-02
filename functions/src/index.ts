@@ -18,11 +18,14 @@ interface Device {
 // --- Helper Functions ---
 
 async function getTokensForEntity(entityId: string, entityType: 'clients' | 'users'): Promise<string[]> {
-    const devicesSnapshot = await db.collection(entityType).doc(entityId).collection('devices').get();
+    const subcollection = entityType === 'clients' ? 'pushTokens' : 'devices';
+    const devicesSnapshot = await db.collection(entityType).doc(entityId).collection(subcollection).get();
+
     if (devicesSnapshot.empty) {
         return [];
     }
-    return devicesSnapshot.docs.map(doc => (doc.data() as Device).token);
+    // For pushTokens, the doc ID is the token. For devices, it's in the data.
+    return devicesSnapshot.docs.map(doc => subcollection === 'pushTokens' ? doc.id : doc.data().token);
 }
 
 
@@ -132,25 +135,32 @@ async function sendPushNotification(
     
     try {
         const response = await admin.messaging().sendEachForMulticast(message);
-        functions.logger.info(`Push notification sent to ${response.successCount} tokens for ${entityType} ${entityId}.`);
+        functions.logger.info(`Push notification sent to ${response.successCount} of ${uniqueTokens.length} tokens for ${entityType} ${entityId}.`);
 
-        const tokensToRemove: Promise<any>[] = [];
-        response.responses.forEach((resp, idx) => {
-            if (!resp.success) {
-                const errorCode = resp.error?.code;
-                if (errorCode === 'messaging/invalid-registration-token' ||
-                    errorCode === 'messaging/registration-token-not-registered') {
-                    
-                    const tokenToDelete = uniqueTokens[idx];
-                    const deviceDocRef = db.collection(entityType).doc(entityId).collection('devices').doc(tokenToDelete);
-                    tokensToRemove.push(deviceDocRef.delete());
+        if (response.failureCount > 0) {
+            const tokensToDelete: string[] = [];
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    const errorCode = resp.error?.code;
+                    if (
+                        errorCode === 'messaging/invalid-registration-token' ||
+                        errorCode === 'messaging/registration-token-not-registered'
+                    ) {
+                        tokensToDelete.push(uniqueTokens[idx]);
+                    }
                 }
-            }
-        });
+            });
 
-        if (tokensToRemove.length > 0) {
-            await Promise.all(tokensToRemove);
-            functions.logger.info(`Removed ${tokensToRemove.length} invalid FCM tokens for ${entityType} ${entityId}.`);
+            if (tokensToDelete.length > 0) {
+                functions.logger.info(`Deleting ${tokensToDelete.length} invalid tokens for ${entityType} ${entityId}.`);
+                const subcollection = entityType === 'clients' ? 'pushTokens' : 'devices';
+                const batch = db.batch();
+                tokensToDelete.forEach(token => {
+                    const docRef = db.collection(entityType).doc(entityId).collection(subcollection).doc(token);
+                    batch.delete(docRef);
+                });
+                await batch.commit();
+            }
         }
     } catch (error) {
         functions.logger.error(`Error sending push notification multicast for ${entityType} ${entityId}:`, error);

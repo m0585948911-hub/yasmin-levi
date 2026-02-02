@@ -11,8 +11,6 @@ import { PushNotifications, PushNotificationSchema, ActionPerformed } from '@cap
 import { getApp } from 'firebase/app';
 
 
-const FCM_PERMISSION_KEY = 'fcm_permission_requested';
-
 export const PushNotificationHandler = () => {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -20,24 +18,19 @@ export const PushNotificationHandler = () => {
     const { toast } = useToast();
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    const initializePush = useCallback(async () => {
-        if(clientId) {
-            await registerPushToken(clientId, 'clients');
-        }
-        localStorage.setItem(FCM_PERMISSION_KEY, 'true');
-    }, [clientId]);
-  
     useEffect(() => {
         if (!clientId) return;
-        
-        const permissionRequested = localStorage.getItem(FCM_PERMISSION_KEY);
-        // Only initialize push if permission has been requested before (either granted or denied)
-        // This prevents the automatic browser prompt on first load.
-        // The user can now grant permission from the settings page.
-        if (permissionRequested) {
-            initializePush();
+
+        // The user can grant permission from the settings page.
+        // We only try to register if permission is already granted.
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+             registerPushToken(clientId).catch(err => {
+                console.error("Failed to register for push notifications:", err);
+            });
         }
-    }, [clientId, initializePush]);
+        
+    }, [clientId]);
+
 
     useEffect(() => {
         if (typeof window === 'undefined' || !clientId) return;
