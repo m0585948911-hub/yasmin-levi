@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AppThemeApplicator } from '@/components/app-theme-applicator';
 import { Toaster } from '@/components/ui/toaster';
+import { APP_VERSION } from '@/lib/version';
 
 export const metadata: Metadata = {
   title: 'יסמין לוי',
@@ -33,7 +34,7 @@ export default function RootLayout({
         {children}
         <Toaster />
         <footer className="fixed bottom-0 left-0 right-0 p-2 text-center text-xs text-muted-foreground bg-background/80 backdrop-blur-sm z-50">
-          <p>פיתוח: יסמין לוי</p>
+          <p>פיתוח: יסמין לוי | גרסה: {APP_VERSION}</p>
         </footer>
       </body>
     </html>

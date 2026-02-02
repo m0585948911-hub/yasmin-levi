@@ -45,6 +45,9 @@ async function getWebToken(): Promise<string> {
     throw new Error("No web FCM token returned");
   }
 
+  // ✅ DEBUG: הדפסה ברורה להעתקה
+  console.log("🔥 WEB FCM TOKEN 🔥\n" + token);
+
   return token;
 }
 
@@ -65,6 +68,10 @@ function getNativeToken(): Promise<string | null> {
       const regHandler = (token: Token) => {
         sub1.remove();
         sub2.remove();
+
+        // ✅ DEBUG: הדפסה ברורה להעתקה
+        console.log("🔥 NATIVE FCM TOKEN 🔥\n" + token.value);
+
         resolve(token.value);
       };
 
@@ -99,7 +106,14 @@ export async function registerPushToken(clientId: string) {
   try {
     if (platform === "web") {
       const token = await getWebToken();
+
+      // ✅ DEBUG: עוד הדפסה כדי לוודא שזה באמת הגיע לכאן
+      console.log("✅ Saved web token for clientId:", clientId);
+      console.log("✅ Platform:", platform);
+      console.log("✅ Token length:", token.length);
+
       await savePushTokenAction({ clientId, token, platform: "web" });
+
       console.log("Saved web token");
       return;
     }
@@ -107,7 +121,13 @@ export async function registerPushToken(clientId: string) {
     if (platform === "android") {
       const token = await getNativeToken();
       if (!token) return;
+
+      console.log("✅ Saved android token for clientId:", clientId);
+      console.log("✅ Platform:", platform);
+      console.log("✅ Token length:", token.length);
+
       await savePushTokenAction({ clientId, token, platform: "android" });
+
       console.log("Saved android token");
       return;
     }
@@ -116,7 +136,13 @@ export async function registerPushToken(clientId: string) {
     if (platform === "ios") {
       const token = await getNativeToken();
       if (!token) return;
+
+      console.log("✅ Saved ios token for clientId:", clientId);
+      console.log("✅ Platform:", platform);
+      console.log("✅ Token length:", token.length);
+
       await savePushTokenAction({ clientId, token, platform: "ios" });
+
       console.log("Saved ios token");
       return;
     }
