@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
@@ -108,6 +109,7 @@ export async function registerPushToken(entityId: string, entityType: "clients" 
     
     if (!token) {
         console.warn(`[PUSH] Could not get a push token for platform: ${platform}`);
+        localStorage.removeItem(`push_token_registered_${entityType}_${entityId}`);
         return;
     }
 
@@ -122,6 +124,7 @@ export async function registerPushToken(entityId: string, entityType: "clients" 
         debug: true
     });
 
+    localStorage.setItem(`push_token_registered_${entityType}_${entityId}`, 'true');
     console.log(`[PUSH] ✅ Saved ${platform} token successfully.`);
 
   } catch (err) {

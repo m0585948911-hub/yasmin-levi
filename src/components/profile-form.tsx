@@ -2,7 +2,7 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import React, { useEffect, useState, useTransition } from 'react';
+import React, { useEffect, useState, useTransition, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -47,7 +47,7 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
   const [isLoading, setIsLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [isPushEnabledOnDevice, setIsPushEnabledOnDevice] = useState(false);
 
   const form = useForm<z.infer<typeof profileFormSchema>>({
     resolver: zodResolver(profileFormSchema),
@@ -63,17 +63,33 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
       }
     }
   });
+  
+  const checkPushStatus = useCallback(() => {
+    if (typeof window === 'undefined' || !clientId) return;
+
+    const isRegisteredInStorage = localStorage.getItem(`push_token_registered_clients_${clientId}`) === 'true';
+    const permission = 'Notification' in window ? Notification.permission : 'denied';
+
+    if (isRegisteredInStorage && permission === 'granted') {
+        setIsPushEnabledOnDevice(true);
+    } else {
+        setIsPushEnabledOnDevice(false);
+        // Clean up inconsistent state if it exists
+        if (isRegisteredInStorage && permission !== 'granted') {
+             localStorage.removeItem(`push_token_registered_clients_${clientId}`);
+        }
+    }
+  }, [clientId]);
+
 
   useEffect(() => {
-    if ('Notification' in window) {
-      setNotificationPermission(Notification.permission);
-    }
-
     if (!clientId) {
       toast({ variant: 'destructive', title: 'שגיאה', description: 'מזהה לקוח חסר.' });
       router.push('/');
       return;
     }
+
+    checkPushStatus();
 
     async function fetchClient() {
       setIsLoading(true);
@@ -100,7 +116,7 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
       setIsLoading(false);
     }
     fetchClient();
-  }, [clientId, router, toast, form]);
+  }, [clientId, router, toast, form, checkPushStatus]);
 
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -145,15 +161,20 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
   };
 
   const handleRequestNotificationPermission = () => {
-    Notification.requestPermission().then(async (permission) => {
-      setNotificationPermission(permission);
+    if (!('Notification' in window)) return;
 
+    Notification.requestPermission().then(async (permission) => {
       if (permission === 'granted') {
         if (clientId) {
           await registerPushToken(clientId, 'clients');
+          setIsPushEnabledOnDevice(true);
           toast({ title: 'הצלחה', description: 'התראות הופעלו. תקבל/י מאיתנו עדכונים חשובים.' });
         }
       } else {
+        setIsPushEnabledOnDevice(false);
+        if (clientId) {
+          localStorage.removeItem(`push_token_registered_clients_${clientId}`);
+        }
         toast({
           variant: 'destructive',
           title: 'שימ/י לב',
@@ -319,20 +340,20 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2"><Bell /> הגדרות התראות</h3>
 
-                {notificationPermission === 'granted' ? (
-                  <p className="text-sm text-green-600">התראות מופעלות עבור מכשיר זה.</p>
-                ) : notificationPermission === 'denied' ? (
-                  <div className="text-sm text-destructive">
-                    <p>התראות חסומות. כדי לקבל עדכונים, יש לאפשר אותן בהגדרות המכשיר עבור האפליקציה.</p>
-                  </div>
+                {isPushEnabledOnDevice ? (
+                    <div className="p-3 border rounded-md bg-green-50 text-green-800">
+                        <p className="text-sm font-medium">התראות מופעלות עבור מכשיר זה.</p>
+                        <p className="text-xs">כדי לכבות, יש לשנות את ההרשאה בהגדרות הדפדפן.</p>
+                    </div>
                 ) : (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 border rounded-md">
-                    <p className="text-sm text-muted-foreground">קבל/י תזכורות על תורים ועדכונים חשובים.</p>
-                    <Button type="button" onClick={handleRequestNotificationPermission} variant="outline" size="sm">
-                      הפעל התראות
-                    </Button>
-                  </div>
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 border rounded-md">
+                        <p className="text-sm text-muted-foreground">קבל/י תזכורות על תורים ועדכונים חשובים.</p>
+                        <Button type="button" onClick={handleRequestNotificationPermission} variant="outline" size="sm">
+                        הפעל התראות במכשיר זה
+                        </Button>
+                    </div>
                 )}
+
 
                 <div className="space-y-3 pt-4 border-t">
                   <FormField
@@ -399,5 +420,3 @@ export function ProfileForm({ title = "פרופיל והגדרות" }: { title?:
     </div>
   );
 }
-
-    
