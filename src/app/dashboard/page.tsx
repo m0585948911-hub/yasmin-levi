@@ -1,4 +1,3 @@
-
 'use client'
 
 import { DashboardIcon } from "@/components/dashboard-icon";
@@ -20,7 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Client } from "@/lib/clients";
-import { PushNotificationHandler } from "@/components/PushNotificationHandler";
+import PushNotificationHandler from "@/components/PushNotificationHandler";
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { VersionNotifier } from "@/components/version-notifier";
