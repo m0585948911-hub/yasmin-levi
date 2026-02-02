@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Capacitor } from '@capacitor/core';
@@ -10,7 +11,9 @@ async function getWebToken(): Promise<string> {
     try {
         const app = getApp();
         const messaging = getMessaging(app);
-        const currentToken = await getFCMToken(messaging);
+        // This is the VAPID key from your Firebase project settings
+        const vapidKey = "BA_QAdiiYimKiW14NtYSCfj2Bp-fJzWalaswuLOHTONV6ZNp-SFxiVtOdtgcoqMIPCONX1D8-yiDIT5-ogljcGk";
+        const currentToken = await getFCMToken(messaging, { vapidKey: vapidKey });
         
         if (currentToken) {
             console.log('Web FCM Token received:', currentToken);
@@ -62,7 +65,7 @@ function getNativeToken(): Promise<string | null> {
  * Registers the device for push notifications (web or native) and saves the token to Firestore.
  * This should be called after a user logs in and their `clientId` is available.
  */
-export async function registerPushToken(clientId: string) {
+export async function registerPushToken(clientId: string, entityType: 'clients' | 'users' = 'clients') {
     if (!clientId) {
         console.error("Cannot register push token without a clientId.");
         return;
@@ -75,6 +78,7 @@ export async function registerPushToken(clientId: string) {
             console.log("Registering for web push...");
             const token = await getWebToken();
             if (token) {
+                // The action handles saving to the correct collection based on its logic
                 await savePushTokenAction({ clientId, token, platform: 'web' });
             }
         } catch (err) {
