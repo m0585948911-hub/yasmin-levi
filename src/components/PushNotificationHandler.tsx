@@ -1,180 +1,117 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
-import { registerPushToken } from '@/lib/push';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
+import {
+  PushNotifications,
+  PushNotificationSchema,
+  ActionPerformed,
+} from '@capacitor/push-notifications';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { getMessaging, onMessage } from 'firebase/messaging';
-import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
-import { PushNotifications, PushNotificationSchema, ActionPerformed } from '@capacitor/push-notifications';
+import { registerPushToken } from '@/lib/push';
 import { getApp } from 'firebase/app';
+import { getMessaging, onMessage } from 'firebase/messaging';
 
-function getClientIdFromLocalStorage(): string | null {
-  try {
-    const raw = localStorage.getItem('clientUser');
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    return obj?.id || null;
-  } catch {
-    return null;
-  }
-}
-
-export default function PushNotificationHandler() {
+// Helper to get client ID without causing server/client mismatch
+function useClientId(): string | null {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const { toast } = useToast();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [clientId, setClientId] = useState<string | null>(null);
 
-  // ✅ works on web (query param) + native (localStorage)
-  const clientId = useMemo(() => {
-    const fromQuery = searchParams.get('id');
-    if (fromQuery) return fromQuery;
-    if (typeof window === 'undefined') return null;
-    return getClientIdFromLocalStorage();
-  }, [searchParams]);
-
-  // ✅ Register token (web/native) once we have clientId
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!clientId) {
-      console.warn('⚠️ Push: no clientId yet (query/localStorage)');
+    const fromQuery = searchParams.get('id');
+    if (fromQuery) {
+      setClientId(fromQuery);
       return;
     }
-
-    const platform = Capacitor.getPlatform();
-
-    // --- WEB: request permission + register token ---
-    const registerWeb = async () => {
-      if (!('Notification' in window)) return;
-
-      const perm =
-        Notification.permission === 'granted'
-          ? 'granted'
-          : await Notification.requestPermission();
-
-      if (perm !== 'granted') {
-        console.warn('❌ Push(web): permission not granted');
-        return;
+    
+    try {
+      const raw = localStorage.getItem('clientUser');
+      if (raw) {
+        const obj = JSON.parse(raw);
+        setClientId(obj?.id || null);
       }
-
-      await registerPushToken(clientId);
-      console.log('✅ Push(web): token saved');
-    };
-
-    // --- NATIVE: request permission + register token ---
-    const registerNative = async () => {
-      const perm = await PushNotifications.requestPermissions();
-      if (perm.receive !== 'granted') {
-        console.warn('❌ Push(native): permission not granted');
-        return;
-      }
-
-      await PushNotifications.register();
-      console.log('✅ Push(native): register() called');
-
-      // This uses your existing lib/push.ts path for android/ios
-      await registerPushToken(clientId);
-      console.log('✅ Push(native): token saved');
-    };
-
-    (async () => {
-      try {
-        if (platform === 'web') await registerWeb();
-        else await registerNative();
-      } catch (e) {
-        console.error('🔥 Push register failed:', e);
-      }
-    })();
-  }, [clientId]);
-
-  // ✅ Foreground listeners
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const platform = Capacitor.getPlatform();
-
-    // --- WEB foreground messages ---
-    if (platform === 'web') {
-      const app = getApp();
-      const messaging = getMessaging(app);
-
-      const unsubscribe = onMessage(messaging, (payload) => {
-        console.log('Foreground message received (web):', payload);
-
-        toast({
-          title: payload.notification?.title,
-          description: payload.notification?.body,
-        });
-
-        audioRef.current?.play().catch((e) => console.error('Audio play failed', e));
-      });
-
-      return () => unsubscribe();
+    } catch {
+      setClientId(null);
     }
+  }, [searchParams]);
 
-    // --- NATIVE foreground listeners ---
-    let receivedHandle: PluginListenerHandle | null = null;
-    let actionHandle: PluginListenerHandle | null = null;
-    let cancelled = false;
+  return clientId;
+}
 
-    const setupListeners = async () => {
-      try {
-        const recHandle = await PushNotifications.addListener(
-          'pushNotificationReceived',
-          (notification: PushNotificationSchema) => {
-            console.log('Push received in foreground (native):', notification);
 
-            toast({
-              title: notification.title,
-              description: notification.body,
+export default function PushNotificationHandler() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const clientId = useClientId();
+  const listenersRef = useRef<PluginListenerHandle[]>([]);
+
+  const platform = useMemo(() => Capacitor.getPlatform(), []);
+
+  const log = (...args: any[]) => console.log('[PUSH]', ...args);
+
+  // 1. Register device token on mount when clientId is available
+  useEffect(() => {
+    if (clientId && (platform === 'web' || platform === 'android' || platform === 'ios')) {
+      log(`Client ID found (${clientId}), registering for push notifications on platform: ${platform}`);
+      registerPushToken(clientId, 'clients');
+    }
+  }, [clientId, platform]);
+
+  // 2. Setup listeners for native platforms and web foreground
+  useEffect(() => {
+    if (platform === 'web') {
+        try {
+            const app = getApp();
+            const messaging = getMessaging(app);
+            const unsubscribe = onMessage(messaging, (payload) => {
+                log('Foreground message (web):', payload);
+                toast({
+                    title: payload.notification?.title,
+                    description: payload.notification?.body,
+                });
             });
-
-            audioRef.current?.play().catch((e) => console.error('Audio play failed', e));
-          }
-        );
-
-        if (cancelled) {
-          recHandle.remove();
-          return;
+            return () => unsubscribe();
+        } catch (error) {
+            log('Error setting up web foreground listener:', error);
         }
-        receivedHandle = recHandle;
+    }
+    
+    if (platform === 'android' || platform === 'ios') {
+      log('Setting up native push listeners...');
 
-        const actHandle = await PushNotifications.addListener(
-          'pushNotificationActionPerformed',
-          (action: ActionPerformed) => {
-            console.log('Push action performed (native):', action);
-
-            // be defensive with data access
-            const route = (action as any)?.notification?.data?.route;
-            if (route) router.push(route);
-          }
-        );
-
-        if (cancelled) {
-          actHandle.remove();
-          return;
+      const notificationListener = PushNotifications.addListener(
+        'pushNotificationReceived',
+        (notification: PushNotificationSchema) => {
+          log('Foreground notification (native):', notification);
+          toast({
+            title: notification.title,
+            description: notification.body,
+          });
         }
-        actionHandle = actHandle;
-      } catch (e) {
-        console.error('Failed to add native push listeners', e);
-      }
-    };
+      );
 
-    setupListeners();
+      const actionListener = PushNotifications.addListener(
+        'pushNotificationActionPerformed',
+        (notification: ActionPerformed) => {
+          const route = notification.notification.data?.route;
+          log(`Notification action performed. Route: ${route}`);
+          if (route) {
+            router.push(route);
+          }
+        }
+      );
+      
+      listenersRef.current.push(notificationListener, actionListener);
 
-    return () => {
-      cancelled = true;
-      receivedHandle?.remove();
-      actionHandle?.remove();
-    };
-  }, [toast, router]);
+      return () => {
+        log('Cleaning up native listeners.');
+        listenersRef.current.forEach(listener => listener.remove());
+        listenersRef.current = [];
+      };
+    }
+  }, [platform, router, toast]);
 
-  return (
-    <audio
-      ref={audioRef}
-      src="https://firebasestorage.googleapis.com/v0/b/yasmin-beauty-diary.firebasestorage.app/o/MP3%2Fsound-email-received.mp3?alt=media&token=ba9b57a8-bfa9-4fb0-98a5-6290616479cf"
-      preload="auto"
-    />
-  );
+  // This component doesn't render anything.
+  return null;
 }

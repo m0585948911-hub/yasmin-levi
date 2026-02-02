@@ -1,154 +1,124 @@
 "use client";
 
 import { Capacitor } from "@capacitor/core";
-import { PushNotifications, Token } from "@capacitor/push-notifications";
+import { PushNotifications, Token, type PluginListenerHandle } from "@capacitor/push-notifications";
 import { getApp } from "firebase/app";
 import { getMessaging, getToken as getFCMToken } from "firebase/messaging";
 import { savePushTokenAction } from "@/app/actions/savePushTokenAction";
 
-/**
- * Web FCM token
- * - registers/uses firebase-messaging-sw.js
- * - requests notification permission
- * - gets FCM token with VAPID + explicit SW registration
- */
 async function getWebToken(): Promise<string> {
   if (!("serviceWorker" in navigator)) {
     throw new Error("Service workers not supported in this browser");
   }
-
-  // Register (or reuse) the FCM service worker
   const swReg =
     (await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js")) ||
     (await navigator.serviceWorker.register("/firebase-messaging-sw.js"));
 
-  // Request permission
   const perm = await Notification.requestPermission();
   if (perm !== "granted") {
     throw new Error("Notification permission not granted");
   }
-
   const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
   if (!vapidKey) {
     throw new Error("Missing NEXT_PUBLIC_FIREBASE_VAPID_KEY");
   }
-
   const app = getApp();
   const messaging = getMessaging(app);
-
   const token = await getFCMToken(messaging, {
     vapidKey,
     serviceWorkerRegistration: swReg,
   });
-
   if (!token) {
     throw new Error("No web FCM token returned");
   }
-
-  // ✅ DEBUG: הדפסה ברורה להעתקה
   console.log("🔥 WEB FCM TOKEN 🔥\n" + token);
-
   return token;
 }
 
-/**
- * Native (Android/iOS) token via Capacitor PushNotifications
- * - requests permission
- * - registers device
- * - resolves token from 'registration' event
- */
 function getNativeToken(): Promise<string | null> {
   return new Promise(async (resolve, reject) => {
+    let regHandler: PluginListenerHandle | null = null;
+    let errHandler: PluginListenerHandle | null = null;
+
+    const cleanup = () => {
+        regHandler?.remove();
+        errHandler?.remove();
+    };
+
     try {
       const permStatus = await PushNotifications.requestPermissions();
       if (permStatus.receive !== "granted") {
+        cleanup();
         return resolve(null);
       }
-
-      const regHandler = (token: Token) => {
-        sub1.remove();
-        sub2.remove();
-
-        // ✅ DEBUG: הדפסה ברורה להעתקה
+      
+      regHandler = await PushNotifications.addListener("registration", (token: Token) => {
         console.log("🔥 NATIVE FCM TOKEN 🔥\n" + token.value);
-
+        cleanup();
         resolve(token.value);
-      };
+      });
 
-      const errHandler = (err: any) => {
-        sub1.remove();
-        sub2.remove();
+      errHandler = await PushNotifications.addListener("registrationError", (err: any) => {
+        console.error("Native token registration error:", err);
+        cleanup();
         reject(err);
-      };
-
-      const sub1 = await PushNotifications.addListener("registration", regHandler);
-      const sub2 = await PushNotifications.addListener("registrationError", errHandler);
+      });
 
       await PushNotifications.register();
     } catch (e) {
+      cleanup();
       reject(e);
     }
   });
 }
 
-/**
- * Registers the device for push notifications (web or native)
- * and saves the token via server action to Firestore.
- *
- * Usage:
- *   await registerPushToken(clientId)
- */
-export async function registerPushToken(clientId: string) {
-  if (!clientId) return;
+export async function registerPushToken(entityId: string, entityType: "clients" | "users") {
+  if (!entityId) {
+    console.warn("[PUSH] registerPushToken called without an entityId.");
+    return;
+  }
 
   const platform = Capacitor.getPlatform();
+  const getOrCreateDeviceId = (platform: string) => {
+    const key = `push_device_id_${platform}`;
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const newId = `${platform}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+    localStorage.setItem(key, newId);
+    return newId;
+  };
+  const deviceId = getOrCreateDeviceId(platform);
 
   try {
+    let token: string | null = null;
     if (platform === "web") {
-      const token = await getWebToken();
-
-      // ✅ DEBUG: עוד הדפסה כדי לוודא שזה באמת הגיע לכאן
-      console.log("✅ Saved web token for clientId:", clientId);
-      console.log("✅ Platform:", platform);
-      console.log("✅ Token length:", token.length);
-
-      await savePushTokenAction({ clientId, token, platform: "web" });
-
-      console.log("Saved web token");
+      token = await getWebToken();
+    } else if (platform === "android" || platform === "ios") {
+      token = await getNativeToken();
+    } else {
+      console.log("[PUSH] Push not configured for platform:", platform);
       return;
     }
-
-    if (platform === "android") {
-      const token = await getNativeToken();
-      if (!token) return;
-
-      console.log("✅ Saved android token for clientId:", clientId);
-      console.log("✅ Platform:", platform);
-      console.log("✅ Token length:", token.length);
-
-      await savePushTokenAction({ clientId, token, platform: "android" });
-
-      console.log("Saved android token");
-      return;
+    
+    if (!token) {
+        console.warn(`[PUSH] Could not get a push token for platform: ${platform}`);
+        return;
     }
 
-    // iOS (אם בעתיד תוסיף)
-    if (platform === "ios") {
-      const token = await getNativeToken();
-      if (!token) return;
+    console.log(`[PUSH] ✅ Got token for ${platform}. Saving for ${entityType}/${entityId}`);
+    
+    await savePushTokenAction({
+        entityId,
+        entityType,
+        token,
+        platform: platform as "web" | "android" | "ios",
+        deviceId,
+        debug: true
+    });
 
-      console.log("✅ Saved ios token for clientId:", clientId);
-      console.log("✅ Platform:", platform);
-      console.log("✅ Token length:", token.length);
+    console.log(`[PUSH] ✅ Saved ${platform} token successfully.`);
 
-      await savePushTokenAction({ clientId, token, platform: "ios" });
-
-      console.log("Saved ios token");
-      return;
-    }
-
-    console.log("Push not configured for platform:", platform);
   } catch (err) {
-    console.error("registerPushToken failed:", err);
+    console.error(`[PUSH] registerPushToken for ${entityType}/${entityId} failed:`, err);
   }
 }

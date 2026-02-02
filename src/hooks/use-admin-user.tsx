@@ -55,13 +55,11 @@ export const AdminUserProvider = ({ children }: { children: React.ReactNode }) =
 
   const setupAdminPushNotifications = useCallback(async (currentUser: User) => {
     if (!currentUser?.id) return;
-
     try {
-      // registerPushToken expects ONLY ONE argument in your current implementation
-      await registerPushToken(currentUser.id);
-      console.log('Admin push notification setup initiated.');
+      await registerPushToken(currentUser.id, 'users');
+      console.log('[useAdminUser] Admin push notification setup initiated.');
     } catch (error) {
-      console.error('An error occurred while setting up admin push notifications.', error);
+      console.error('[useAdminUser] An error occurred while setting up admin push notifications.', error);
     }
   }, []);
 
