@@ -6,9 +6,10 @@ import { getApp } from "firebase/app";
 import { getMessaging, getToken as getFCMToken } from "firebase/messaging";
 import { savePushTokenAction } from "@/app/actions/savePushTokenAction";
 
-async function getWebToken(): Promise<string> {
+async function getWebToken(): Promise<string | null> {
   if (!("serviceWorker" in navigator)) {
-    throw new Error("Service workers not supported in this browser");
+    console.warn("[PUSH] Service workers not supported in this browser.");
+    return null;
   }
   const swReg =
     (await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js")) ||
@@ -16,11 +17,13 @@ async function getWebToken(): Promise<string> {
 
   const perm = await Notification.requestPermission();
   if (perm !== "granted") {
-    throw new Error("Notification permission not granted");
+    console.warn("[PUSH] Notification permission not granted.");
+    return null;
   }
   const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
   if (!vapidKey) {
-    throw new Error("Missing NEXT_PUBLIC_FIREBASE_VAPID_KEY");
+    console.error("[PUSH] Missing NEXT_PUBLIC_FIREBASE_VAPID_KEY environment variable.");
+    return null;
   }
   const app = getApp();
   const messaging = getMessaging(app);
@@ -29,7 +32,8 @@ async function getWebToken(): Promise<string> {
     serviceWorkerRegistration: swReg,
   });
   if (!token) {
-    throw new Error("No web FCM token returned");
+    console.warn("[PUSH] No web FCM token returned from Firebase.");
+    return null;
   }
   console.log("🔥 WEB FCM TOKEN 🔥\n" + token);
   return token;
