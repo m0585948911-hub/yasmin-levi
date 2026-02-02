@@ -1,7 +1,7 @@
 "use client";
 
-import { Capacitor } from "@capacitor/core";
-import { PushNotifications, Token, type PluginListenerHandle } from "@capacitor/push-notifications";
+import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
+import { PushNotifications, Token } from "@capacitor/push-notifications";
 import { getApp } from "firebase/app";
 import { getMessaging, getToken as getFCMToken } from "firebase/messaging";
 import { savePushTokenAction } from "@/app/actions/savePushTokenAction";
@@ -22,7 +22,9 @@ async function getWebToken(): Promise<string | null> {
   }
   const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
   if (!vapidKey) {
-    console.error("[PUSH] Missing NEXT_PUBLIC_FIREBASE_VAPID_KEY environment variable.");
+    console.error(
+      "[PUSH] Missing NEXT_PUBLIC_FIREBASE_VAPID_KEY environment variable."
+    );
     return null;
   }
   const app = getApp();
