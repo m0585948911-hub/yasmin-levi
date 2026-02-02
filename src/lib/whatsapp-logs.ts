@@ -1,4 +1,3 @@
-
 'use server';
 
 import { collection, getDocs, query, orderBy, limit, Timestamp } from 'firebase/firestore';
