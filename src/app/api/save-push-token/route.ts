@@ -4,37 +4,82 @@ import { adminDb } from "@/lib/firebase-admin";
 type Platform = "web" | "android" | "ios";
 type EntityType = "clients" | "users";
 
+function isValidEntityType(v: any): v is EntityType {
+  return v === "clients" || v === "users";
+}
+
+function isValidPlatform(v: any): v is Platform {
+  return v === "web" || v === "android" || v === "ios";
+}
+
+function looksLikeFcmToken(token: string) {
+  if (!token) return false;
+  if (token.length < 50) return false;
+  return /^[A-Za-z0-9\-\_:]+$/.test(token);
+}
+
+function generateDeviceId(platform: string) {
+  return `${platform}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
+
 export async function POST(req: Request) {
   try {
-    const body: {
-        entityId: string;
-        entityType: EntityType;
-        token: string;
-        platform: Platform;
-        deviceId?: string;
-        debug?: boolean;
-    } = await req.json();
+    const body = await req.json().catch(() => null);
 
-    const { entityId, entityType, token, platform } = body;
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+    }
 
-    if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
-    if (!platform) return NextResponse.json({ error: "Missing platform" }, { status: 400 });
-    if (!entityId) return NextResponse.json({ error: "Missing entityId" }, { status: 400 });
-    if (!entityType) return NextResponse.json({ error: "Missing entityType" }, { status: 400 });
+    const {
+      entityId,
+      entityType,
+      token,
+      platform,
+      deviceId: deviceIdRaw,
+      debug,
+    } = body as {
+      entityId?: string;
+      entityType?: EntityType;
+      token?: string;
+      platform?: Platform;
+      deviceId?: string;
+      debug?: boolean;
+    };
+
+    if (!entityId || typeof entityId !== "string") {
+      return NextResponse.json({ ok: false, error: "Missing entityId" }, { status: 400 });
+    }
+    if (!isValidEntityType(entityType)) {
+      return NextResponse.json({ ok: false, error: "Missing/invalid entityType" }, { status: 400 });
+    }
+    if (!isValidPlatform(platform)) {
+      return NextResponse.json({ ok: false, error: "Missing/invalid platform" }, { status: 400 });
+    }
+    if (!token || typeof token !== "string") {
+      return NextResponse.json({ ok: false, error: "Missing token" }, { status: 400 });
+    }
+
+    // Debug mode מאפשר בדיקות עם טוקן "לא אמיתי"
+    if (!debug && !looksLikeFcmToken(token)) {
+      return NextResponse.json({ ok: false, error: "Invalid token" }, { status: 400 });
+    }
+
+    const deviceId =
+      typeof deviceIdRaw === "string" && deviceIdRaw.trim()
+        ? deviceIdRaw.trim()
+        : generateDeviceId(platform);
 
     const now = new Date();
 
-    const deviceId =
-      body.deviceId ||
-      `${platform}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
-
-    if (body.debug || entityId === "NO_CLIENT_ID") {
+    // 1) Debug collection (אופציונלי)
+    if (debug) {
       await adminDb.collection("push_debug").doc(deviceId).set(
         {
           token,
           platform,
-          entityId: entityId || null,
-          entityType: entityType,
+          entityId,
+          entityType,
+          deviceId,
           lastSeenAt: now,
           createdAt: now,
         },
@@ -42,49 +87,53 @@ export async function POST(req: Request) {
       );
     }
 
-    if (entityId && entityId !== "NO_CLIENT_ID") {
-      const deviceRef = adminDb
-        .collection(entityType)
-        .doc(entityId)
-        .collection("devices")
-        .doc(deviceId);
-
-      await deviceRef.set(
+    // 2) Upsert device under {entityType}/{entityId}/devices/{deviceId}
+    await adminDb
+      .collection(entityType)
+      .doc(entityId)
+      .collection("devices")
+      .doc(deviceId)
+      .set(
         {
           token,
           platform,
           enabled: true,
+          deviceId,
           lastSeenAt: now,
           createdAt: now,
         },
         { merge: true }
       );
 
-      if (entityType === 'clients') {
-          const legacyRef = adminDb
-              .collection("clients")
-              .doc(entityId)
-              .collection("pushTokens")
-              .doc(token);
-
-          await legacyRef.set(
-              {
-                  platform,
-                  enabled: true,
-                  lastSeenAt: now,
-                  createdAt: now,
-                  deviceId: deviceId,
-              },
-              { merge: true }
-          );
-      }
+    // 3) Legacy path by token (אופציונלי)
+    if (entityType === "clients") {
+      await adminDb
+        .collection("clients")
+        .doc(entityId)
+        .collection("pushTokens")
+        .doc(token)
+        .set(
+          {
+            platform,
+            enabled: true,
+            deviceId,
+            lastSeenAt: now,
+            createdAt: now,
+          },
+          { merge: true }
+        );
     }
 
     return NextResponse.json({ ok: true, deviceId });
+  } catch (error: any) {
+    console.error("[API save-push-token] Error:", error);
 
-  } catch (error) {
-    console.error('[API save-push-token] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ error: 'Internal Server Error', details: errorMessage }, { status: 500 });
+    const msg =
+      typeof error?.message === "string" ? error.message : "Unknown server error";
+
+    return NextResponse.json(
+      { ok: false, error: "Internal Server Error", details: msg },
+      { status: 500 }
+    );
   }
 }
