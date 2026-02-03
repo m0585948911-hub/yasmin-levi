@@ -1,11 +1,9 @@
-
 "use client";
 
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { PushNotifications, Token } from "@capacitor/push-notifications";
 import { getApp } from "firebase/app";
 import { getMessaging, getToken as getFCMToken } from "firebase/messaging";
-import { savePushTokenAction } from "@/app/actions/savePushTokenAction";
 
 async function getWebToken(): Promise<string | null> {
   if (!("serviceWorker" in navigator)) {
@@ -115,14 +113,23 @@ export async function registerPushToken(entityId: string, entityType: "clients" 
 
     console.log(`[PUSH] ✅ Got token for ${platform}. Saving for ${entityType}/${entityId}`);
     
-    await savePushTokenAction({
-        entityId,
-        entityType,
-        token,
-        platform: platform as "web" | "android" | "ios",
-        deviceId,
-        debug: true
+    const response = await fetch('/api/save-push-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            entityId,
+            entityType,
+            token,
+            platform: platform as "web" | "android" | "ios",
+            deviceId,
+            debug: true
+        })
     });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to save push token: ${errorData.error || response.statusText}`);
+    }
 
     localStorage.setItem(`push_token_registered_${entityType}_${entityId}`, 'true');
     console.log(`[PUSH] ✅ Saved ${platform} token successfully.`);
