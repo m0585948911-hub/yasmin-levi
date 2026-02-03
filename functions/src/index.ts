@@ -451,7 +451,7 @@ export const onFormInstanceCreated = functions.firestore
             
             functions.logger.info(`New form instance ${context.params.instanceId} for client ${clientId}. Sending push notification.`);
             
-            await sendPushNotification(clientId, 'clients', title, body, { route: '/my-documents' });
+            await sendPushNotification(clientId, 'clients', title, body, { route: '/my-documents', notificationId: `form-${snap.id}` });
         }
     });
 
@@ -476,7 +476,7 @@ export const onNotificationCreated = functions.firestore
 
         const promises = clientsSnapshot.docs.map(clientDoc => {
             const clientId = clientDoc.id;
-            return sendPushNotification(clientId, 'clients', title, content, { route: '/dashboard' });
+            return sendPushNotification(clientId, 'clients', title, content, { route: '/dashboard', notificationId: snap.id });
         });
 
         await Promise.all(promises);

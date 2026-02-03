@@ -1,3 +1,4 @@
+
 'use client'
 
 import { DashboardIcon } from "@/components/dashboard-icon";
@@ -9,7 +10,6 @@ import { Suspense, useState, useEffect, useTransition, useCallback } from 'react
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { LogOut, Headset, Users, PlusCircle, Settings, Calendar, Loader2, Trash2, FileSignature } from 'lucide-react';
-import { NotificationPopup } from '@/components/notification-popup';
 import Link from 'next/link';
 import { ClientQuote } from '@/components/client-quote';
 import { AppointmentListener } from '@/components/appointment-listener';
@@ -251,7 +251,6 @@ function DashboardContent() {
     <div className="flex flex-col min-h-screen bg-background">
       <PushNotificationHandler />
       <AppointmentListener clientId={clientId || ''} />
-      <NotificationPopup />
       <header className="p-4 flex justify-between items-center">
         <Link href={dashboardLink} className="w-20 h-20">
             <Logo className="w-full h-full" />
