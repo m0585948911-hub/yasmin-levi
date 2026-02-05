@@ -70,6 +70,7 @@ import { BirthDateSelector } from './birth-date-selector';
 import { SignaturePad } from './signature-pad';
 import { User, getUsers } from '@/lib/users';
 import { createReminder } from '@/lib/reminders';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 
 interface ClientMedia {
@@ -1818,6 +1819,98 @@ const CommunicationLogDialog = ({
     );
 };
 
+const TreatmentSummaryTable = ({
+    instances,
+    templates,
+}: {
+    instances: FilledFormInstance[];
+    templates: TreatmentFormTemplate[];
+}) => {
+    
+    // 1. Get all unique header labels from fields marked with 'showInSummary'
+    const summaryHeaders = useMemo(() => {
+        const headers = new Set<string>();
+        templates.forEach(template => {
+            template.fields.forEach(field => {
+                if (field.showInSummary && field.label) {
+                    headers.add(field.label);
+                }
+            });
+        });
+        return Array.from(headers);
+    }, [templates]);
+    
+    // 2. Filter for instances that are actually completed/signed
+    const completedInstances = instances
+        .filter(i => i.status === 'completed' || i.status === 'signed')
+        .sort((a,b) => new Date(b.filledAt!).getTime() - new Date(a.filledAt!).getTime());
+
+    // 3. Early exits for empty states
+    if (completedInstances.length === 0) {
+        return (
+            <p className="text-sm text-center text-muted-foreground py-4">
+                אין סיכומי טיפולים להצגה.
+            </p>
+        );
+    }
+
+    if (summaryHeaders.length === 0) {
+        return (
+            <p className="text-sm text-center text-muted-foreground py-4">
+                לא הוגדרו שדות להצגה בסיכום הכללי. ניתן להגדיר זאת במסך הגדרות הטפסים.
+            </p>
+        );
+    }
+    
+    // 4. Render the table
+    return (
+        <div className="w-full overflow-x-auto">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="min-w-[100px]">תאריך</TableHead>
+                        <TableHead className="min-w-[150px]">סוג טיפול</TableHead>
+                        {summaryHeaders.map(header => (
+                            <TableHead key={header} className="min-w-[150px]">{header}</TableHead>
+                        ))}
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {completedInstances.map(instance => {
+                        const template = templates.find(t => t.id === instance.templateId);
+                        
+                        return (
+                            <TableRow key={instance.instanceId}>
+                                <TableCell>{instance.filledAt ? format(new Date(instance.filledAt), 'dd/MM/yy') : '-'}</TableCell>
+                                <TableCell>{instance.templateName}</TableCell>
+                                {summaryHeaders.map(headerLabel => {
+                                    let value = '-';
+                                    if (template) {
+                                        const field = template.fields.find(f => f.label === headerLabel && f.showInSummary);
+                                        if (field && instance.data[field.id] !== undefined) {
+                                            const rawValue = instance.data[field.id];
+                                            if (typeof rawValue === 'boolean') {
+                                                value = rawValue ? 'כן' : 'לא';
+                                            } else if (Array.isArray(rawValue)) {
+                                                value = rawValue.join(', ');
+                                            } else if (rawValue) {
+                                                value = String(rawValue);
+                                            }
+                                        }
+                                    }
+
+                                    return <TableCell key={headerLabel}>{value}</TableCell>
+                                })}
+                            </TableRow>
+                        )
+                    })}
+                </TableBody>
+            </Table>
+        </div>
+    );
+};
+
+
 export function AdminClientDetails({ initialClient }: { initialClient: Client }) {
   const { user } = useAdminUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2433,6 +2526,22 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                 </Button>
               </CardContent>
             </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>סיכום טיפולים כללי</CardTitle>
+                    <CardDescription>
+                        ריכוז של המידע החשוב מכל הטיפולים הקודמים של הלקוח/ה.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <TreatmentSummaryTable
+                        instances={clientFormHistory}
+                        templates={allTemplates}
+                    />
+                </CardContent>
+            </Card>
+
               <Card>
                   <CardHeader><CardTitle>פעולות מהירות</CardTitle></CardHeader>
                   <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -2552,14 +2661,14 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                                                   </AlertDialogTrigger>
                                                   <AlertDialogContent>
                                                       <AlertDialogHeader>
-                                                          <AlertDialogTitle>האם למחוק את המסמך?</AlertDialogTitle>
-                                                          <AlertDialogDescription>
-                                                              פעולה זו תמחק את המסמך "{doc.name}" לצמיתות.
-                                                          </AlertDialogDescription>
+                                                      <AlertDialogTitle>האם למחוק את המסמך?</AlertDialogTitle>
+                                                      <AlertDialogDescription>
+                                                          פעולה זו תמחק את המסמך "{doc.name}" לצמיתות.
+                                                      </AlertDialogDescription>
                                                       </AlertDialogHeader>
                                                       <AlertDialogFooter>
-                                                          <AlertDialogCancel>ביטול</AlertDialogCancel>
-                                                          <AlertDialogAction onClick={() => handleDeleteUploadedDoc(doc.id)}>מחק</AlertDialogAction>
+                                                      <AlertDialogCancel>ביטול</AlertDialogCancel>
+                                                      <AlertDialogAction onClick={() => handleDeleteUploadedDoc(doc.id)}>מחק</AlertDialogAction>
                                                       </AlertDialogFooter>
                                                   </AlertDialogContent>
                                               </AlertDialog>

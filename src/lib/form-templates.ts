@@ -14,6 +14,7 @@ export interface FormField {
     sortOrder: number;
     imageCount: number;
     required: boolean;
+    showInSummary?: boolean;
 }
 
 export interface TreatmentFormTemplate {

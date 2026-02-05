@@ -170,6 +170,7 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, formTyp
             sortOrder: form.fields.length + 1,
             imageCount: 1,
             required: false,
+            showInSummary: false,
         };
         setForm(prev => ({...prev, fields: [...prev.fields, newField]}));
     };
@@ -327,7 +328,7 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, formTyp
                                             placeholder="מיון"
                                         />
                                      </div>
-                                     <div className="flex items-center gap-4">
+                                     <div className="flex items-center gap-4 flex-wrap">
                                         <Select 
                                             value={field.type} 
                                             onValueChange={(value: FormFieldType) => {
@@ -338,7 +339,7 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, formTyp
                                                 if (value === 'contentWithConsent' || value === 'signature') {
                                                     updates.required = true;
                                                 }
-                                                updateField(field.id, updates);
+                                                updateField(field.id, { ...updates, showInSummary: false });
                                             }}
                                         >
                                             <SelectTrigger className="w-[180px]">
@@ -369,6 +370,16 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, formTyp
                                                 <Label htmlFor={`required-${field.id}`}>שדה חובה</Label>
                                             </div>
                                          )}
+                                          {isInputType(field.type) && (
+                                            <div className="flex items-center space-x-2 space-x-reverse">
+                                                <Switch 
+                                                    id={`showInSummary-${field.id}`} 
+                                                    checked={field.showInSummary}
+                                                    onCheckedChange={(checked) => updateField(field.id, { showInSummary: checked })}
+                                                />
+                                                <Label htmlFor={`showInSummary-${field.id}`}>הצג בסיכום</Label>
+                                            </div>
+                                          )}
                                      </div>
                                     {field.type === 'select' && (
                                          <div className="pl-4 space-y-2">
