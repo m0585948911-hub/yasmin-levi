@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -2935,8 +2936,8 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                   </div>
                   <CardDescription>
                     תיעוד כל האינטראקציות והתקשורת עם הלקוח/ה.
-                  </CardHeader>
-                </CardContent>
+                  </CardDescription>
+                </CardHeader>
                 <CardContent>
                   {communicationLogs.length > 0 ? (
                     <div className="space-y-4">
@@ -3127,3 +3128,5 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     </div>
   );
 }
+
+    
