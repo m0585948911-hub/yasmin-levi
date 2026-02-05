@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -348,7 +349,7 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, formTyp
                                                 <SelectItem value="textarea">טקסט ארוך (הערה)</SelectItem>
                                                 <SelectItem value="select">רשימה נפתחת</SelectItem>
                                                 <SelectItem value="checkbox">תיבת סימון (וי)</SelectItem>
-                                                <SelectItem value="image">העלאת תמונות</SelectItem>
+                                                <SelectItem value="image">העלאת מדיה (תמונות/וידאו)</SelectItem>
                                                 <Separator />
                                                 <SelectItem value="title">כותרת</SelectItem>
                                                 <SelectItem value="subtitle">כותרת משנה</SelectItem>
@@ -392,7 +393,7 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, formTyp
                                     )}
                                     {field.type === 'image' && (
                                         <div className="pl-4 space-y-2">
-                                            <Label className="text-xs">כמות תמונות מקסימלית</Label>
+                                            <Label className="text-xs">כמות קבצי מדיה מקסימלית</Label>
                                             <Input
                                                 type="number"
                                                 min="1"

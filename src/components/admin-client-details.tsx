@@ -31,6 +31,7 @@ import {
   Download,
   MessageSquare,
   Bell,
+  Video,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -71,8 +72,9 @@ import { User, getUsers } from '@/lib/users';
 import { createReminder } from '@/lib/reminders';
 
 
-interface ClientImage {
+interface ClientMedia {
     src: string;
+    type: 'image' | 'video';
     sourceType: 'treatment' | 'summary' | 'manual';
     sourceName: string; // e.g., form name or "Manual Upload"
     date: string; // ISO string
@@ -191,9 +193,13 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
                         } else if (field.type === 'image') {
                            displayValue = (
                                 <div className="flex flex-wrap gap-2 mt-1">
-                                    {(value as string[] || []).map((imgSrc, idx) => (
+                                    {(value as string[] || []).map((mediaSrc, idx) => (
                                         <div key={idx} className="w-32 h-32 relative border rounded">
-                                            <img src={imgSrc} alt={`${field.label} ${idx + 1}`} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+                                            {mediaSrc.startsWith('data:image') ? (
+                                                <img src={mediaSrc} alt={`${field.label} ${idx + 1}`} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+                                            ) : (
+                                                <div className="w-full h-full bg-black text-white flex items-center justify-center">וידאו</div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -405,9 +411,13 @@ const ViewTreatmentInstanceDialog = ({ isOpen, onOpenChange, instance, template,
                     <Label className="font-semibold">{field.label}</Label>
                     {field.type === 'image' ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
-                        {(instance.data[field.id] as string[] || []).map((imgSrc, idx) => (
+                        {(instance.data[field.id] as string[] || []).map((mediaSrc, idx) => (
                             <div key={idx} className="relative aspect-square w-full">
-                            <Image src={imgSrc} alt={`${field.label} ${idx + 1}`} layout="fill" className="object-cover rounded-md border" />
+                            {mediaSrc.startsWith('data:image') ? (
+                                <Image src={mediaSrc} alt={`${field.label} ${idx + 1}`} layout="fill" className="object-cover rounded-md border" />
+                            ) : (
+                                <video src={mediaSrc} controls className="rounded-md border w-full h-full object-cover bg-black" />
+                            )}
                             </div>
                         ))}
                         </div>
@@ -695,7 +705,7 @@ const FillTreatmentForm = ({
         const existingImages = (formData[capturingForFieldId] as string[] || []);
 
         if (existingImages.length >= maxImages) {
-            alert(`ניתן להעלות עד ${maxImages} תמונות לשדה זה.`);
+            alert(`ניתן להעלות עד ${maxImages} קבצים לשדה זה.`);
             return;
         }
         
@@ -724,7 +734,7 @@ const FillTreatmentForm = ({
     const existingImages = (formData[fieldId] as string[] || []);
 
     if (existingImages.length + files.length > maxImages) {
-      alert(`ניתן להעלות עד ${maxImages} תמונות לשדה זה.`);
+      alert(`ניתן להעלות עד ${maxImages} קבצים לשדה זה.`);
       return;
     }
 
@@ -976,7 +986,7 @@ const FillTreatmentForm = ({
                         <Input
                             type="file"
                             multiple
-                            accept="image/*"
+                            accept="image/*,video/mp4"
                             onChange={e => handleImageUpload(e, field.id)}
                             className="mb-2 flex-grow"
                         />
@@ -986,13 +996,21 @@ const FillTreatmentForm = ({
                         </Button>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      {(formData[field.id] as string[] || []).map((imgSrc, idx) => (
+                      {(formData[field.id] as string[] || []).map((mediaSrc, idx) => (
                         <div key={idx} className="relative group">
-                          <img
-                            src={imgSrc}
-                            alt="Uploaded preview"
-                            className="rounded-md object-cover w-full aspect-square"
-                          />
+                          {mediaSrc.startsWith('data:image') ? (
+                            <img
+                                src={mediaSrc}
+                                alt="Uploaded preview"
+                                className="rounded-md object-cover w-full aspect-square"
+                            />
+                          ) : (
+                            <video
+                                src={mediaSrc}
+                                controls
+                                className="rounded-md object-cover w-full aspect-square bg-black"
+                            />
+                          )}
                           <button
                             type="button"
                             onClick={() => removeImage(field.id, idx)}
@@ -1033,14 +1051,14 @@ const FillTreatmentForm = ({
   );
 };
 
-const ViewImageDialog = ({ image, onClose, onDelete }: { image: ClientImage | null; onClose: () => void; onDelete: (manualId: string) => void; }) => {
-    if (!image) return null;
+const ViewMediaDialog = ({ media, onClose, onDelete }: { media: ClientMedia | null; onClose: () => void; onDelete: (manualId: string) => void; }) => {
+    if (!media) return null;
 
     const handleDownload = () => {
         const link = document.createElement('a');
-        link.href = image.src;
-        // Use a generic name with a timestamp to avoid issues
-        link.download = `image_${new Date(image.date).getTime()}.jpeg`;
+        link.href = media.src;
+        const extension = media.type === 'video' ? 'mp4' : 'jpeg';
+        link.download = `media_${new Date(media.date).getTime()}.${extension}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -1050,17 +1068,21 @@ const ViewImageDialog = ({ image, onClose, onDelete }: { image: ClientImage | nu
         <Dialog open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
             <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>תמונה מתוך: {image.sourceName}</DialogTitle>
+                    <DialogTitle>מדיה מתוך: {media.sourceName}</DialogTitle>
                     <DialogDescription>
-                        צולם בתאריך: {new Date(image.date).toLocaleString('he-IL')}
+                        צולם בתאריך: {new Date(media.date).toLocaleString('he-IL')}
                     </DialogDescription>
                 </DialogHeader>
-                <div className="flex-grow relative my-4">
-                    <Image src={image.src} alt="Full size" layout="fill" className="object-contain" />
+                <div className="flex-grow relative my-4 bg-black/80 rounded-md">
+                     {media.type === 'image' ? (
+                        <Image src={media.src} alt="Full size" layout="fill" className="object-contain" />
+                    ) : (
+                        <video src={media.src} controls autoPlay className="w-full h-full object-contain" />
+                    )}
                 </div>
                 <DialogFooter className="justify-between">
                     <div>
-                        {image.sourceType === 'manual' && image.manualId && (
+                        {media.sourceType === 'manual' && media.manualId && (
                            <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button variant="destructive">
@@ -1068,11 +1090,11 @@ const ViewImageDialog = ({ image, onClose, onDelete }: { image: ClientImage | nu
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
-                                <AlertDialogHeader><AlertDialogTitle>האם למחוק את התמונה?</AlertDialogTitle></AlertDialogHeader>
+                                <AlertDialogHeader><AlertDialogTitle>האם למחוק את המדיה?</AlertDialogTitle></AlertDialogHeader>
                                 <AlertDialogDescription>פעולה זו היא סופית ולא ניתן לשחזר אותה.</AlertDialogDescription>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>ביטול</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => onDelete(image.manualId!)}>מחק תמונה</AlertDialogAction>
+                                    <AlertDialogAction onClick={() => onDelete(media.manualId!)}>מחק מדיה</AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                            </AlertDialog>
@@ -1824,7 +1846,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
 
   const [manualImages, setManualImages] = useState<any[]>([]);
-  const [viewingImage, setViewingImage] = useState<ClientImage | null>(null);
+  const [viewingMedia, setViewingMedia] = useState<ClientMedia | null>(null);
 
   const [communicationLogs, setCommunicationLogs] = useState<CommunicationLog[]>([]);
   const [isCommLogDialogOpen, setIsCommLogDialogOpen] = useState(false);
@@ -2156,19 +2178,19 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             reader.readAsDataURL(file);
         });
 
-        toast({ title: 'הצלחה!', description: `${files.length} תמונות הועלו בהצלחה.` });
+        toast({ title: 'הצלחה!', description: `${files.length} קבצי מדיה הועלו בהצלחה.` });
     };
 
     const handleDeleteManualImage = (manualId: string) => {
         const updatedImages = manualImages.filter(img => img.id !== manualId);
         setManualImages(updatedImages);
         setInLocalStorage(`client_manual_images_${client.id}`, updatedImages);
-        setViewingImage(null);
+        setViewingMedia(null);
         toast({ title: 'הצלחה!', description: 'התמונה נמחקה.' });
     };
     
-     const allClientImages: ClientImage[] = useMemo(() => {
-        const images: ClientImage[] = [];
+     const allClientMedia: ClientMedia[] = useMemo(() => {
+        const media: ClientMedia[] = [];
 
         // From forms/summaries in clientFormHistory
         clientFormHistory.forEach(instance => {
@@ -2177,9 +2199,10 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
 
             template.fields.forEach(field => {
                 if (field.type === 'image' && instance.data[field.id] && Array.isArray(instance.data[field.id])) {
-                    (instance.data[field.id] as string[]).forEach(imgSrc => {
-                        images.push({
-                            src: imgSrc,
+                    (instance.data[field.id] as string[]).forEach(mediaSrc => {
+                        media.push({
+                            src: mediaSrc,
+                            type: mediaSrc.startsWith('data:video') ? 'video' : 'image',
                             sourceType: template.type,
                             sourceName: template.name,
                             date: instance.filledAt!,
@@ -2191,18 +2214,19 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
         });
 
         // From manual uploads
-        manualImages.forEach(img => {
-            images.push({
-                src: img.dataUrl,
+        manualImages.forEach(item => {
+            media.push({
+                src: item.dataUrl,
+                type: item.dataUrl.startsWith('data:video') ? 'video' : 'image',
                 sourceType: 'manual',
                 sourceName: 'העלאה ידנית',
-                date: img.createdAt,
-                manualId: img.id,
+                date: item.createdAt,
+                manualId: item.id,
             });
         });
 
         // Sort by date, newest first
-        return images.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return media.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [clientFormHistory, manualImages, allTemplates]);
 
 
@@ -2321,7 +2345,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
           <div className="flex w-full justify-end">
             <TabsList>
                 <TabsTrigger value="communication">תקשורת</TabsTrigger>
-                <TabsTrigger value="photos">תמונות</TabsTrigger>
+                <TabsTrigger value="photos">מדיה</TabsTrigger>
                 <TabsTrigger value="summaries">סיכומים</TabsTrigger>
                 <TabsTrigger value="forms">מסמכים וטפסים</TabsTrigger>
                 <TabsTrigger value="overview">סקירה כללית</TabsTrigger>
@@ -2631,39 +2655,48 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             <Card>
                 <CardHeader>
                     <div className="flex justify-between items-center">
-                        <CardTitle>גלריית תמונות</CardTitle>
+                        <CardTitle>גלריית מדיה</CardTitle>
                         <input
                             type="file"
                             ref={fileInputRef}
                             className="hidden"
-                            accept="image/*"
+                            accept="image/*,video/mp4"
                             multiple
                             onChange={handleManualImageUpload}
                         />
                         <Button onClick={() => fileInputRef.current?.click()}>
                             <Upload className="mr-2" />
-                            העלאת תמונות
+                            העלאת מדיה
                         </Button>
                     </div>
                     <CardDescription>
-                        כל התמונות של הלקוח/ה, כולל העלאות ידניות, תמונות מטפסים וסיכומים.
+                        כל קבצי המדיה של הלקוח/ה, כולל העלאות ידניות, תמונות וסרטונים מטפסים וסיכומים.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {allClientImages.length > 0 ? (
+                    {allClientMedia.length > 0 ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                            {allClientImages.map((image, index) => (
-                                <button key={index} onClick={() => setViewingImage(image)} className="group relative aspect-square w-full overflow-hidden rounded-lg border">
-                                    <Image src={image.src} alt={`Image ${index + 1}`} layout="fill" className="object-cover transition-transform group-hover:scale-105" />
+                            {allClientMedia.map((media, index) => (
+                                <button key={index} onClick={() => setViewingMedia(media)} className="group relative aspect-square w-full overflow-hidden rounded-lg border">
+                                     {media.type === 'image' ? (
+                                        <Image src={media.src} alt={`Media ${index + 1}`} layout="fill" className="object-cover transition-transform group-hover:scale-105" />
+                                    ) : (
+                                        <>
+                                            <video src={media.src} className="object-cover w-full h-full bg-black" />
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Video className="h-8 w-8 text-white" />
+                                            </div>
+                                        </>
+                                    )}
                                     <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-1 text-white text-xs text-center">
-                                        <p>{new Date(image.date).toLocaleDateString('he-IL')}</p>
-                                        <p className="truncate">{image.sourceName}</p>
+                                        <p>{new Date(media.date).toLocaleDateString('he-IL')}</p>
+                                        <p className="truncate">{media.sourceName}</p>
                                     </div>
                                 </button>
                             ))}
                         </div>
                     ) : (
-                        <p className="text-center text-muted-foreground py-16">לא נמצאו תמונות עבור לקוח/ה זו.</p>
+                        <p className="text-center text-muted-foreground py-16">לא נמצאה מדיה עבור לקוח/ה זו.</p>
                     )}
                 </CardContent>
             </Card>
@@ -2857,9 +2890,9 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             client={client}
             adminUserName={user ? `${user.firstName} ${user.lastName}` : 'מנהל/ת'}
         />
-        <ViewImageDialog
-            image={viewingImage}
-            onClose={() => setViewingImage(null)}
+        <ViewMediaDialog
+            media={viewingMedia}
+            onClose={() => setViewingMedia(null)}
             onDelete={handleDeleteManualImage}
         />
         <CommunicationLogDialog
