@@ -542,3 +542,68 @@ export const sendCommunicationReminders = functions.pubsub.schedule('every 1 min
     functions.logger.info(`Processed ${querySnapshot.size} reminders.`);
     return null;
 });
+
+
+export const onFormInstanceFinalized = functions.firestore
+    .document('formInstances/{instanceId}')
+    .onUpdate(async (change, context) => {
+        const dataBefore = change.before.data();
+        const dataAfter = change.after.data();
+
+        // Check if the form was just finalized
+        const wasDraft = dataBefore.status === 'draft' || dataBefore.status === 'pending_client_fill';
+        const isFinal = dataAfter.status === 'completed' || dataAfter.status === 'signed';
+
+        if (!wasDraft || !isFinal) {
+            return; // Not the transition we're looking for
+        }
+        
+        const { clientId, templateId, data: instanceData } = dataAfter;
+
+        if (!clientId || !templateId) {
+            functions.logger.warn(`Missing clientId or templateId for form instance ${context.params.instanceId}`);
+            return;
+        }
+
+        try {
+            // 1. Fetch the form template to find the instructions field
+            const templateDoc = await db.collection('formTemplates').doc(templateId).get();
+            if (!templateDoc.exists) {
+                functions.logger.warn(`Form template ${templateId} not found.`);
+                return;
+            }
+            const template = templateDoc.data() as any; // Simplified type
+
+            // 2. Find the specific field for instructions
+            const instructionsField = template.fields?.find((field: any) => field.label === 'הוראות להמשך טיפול בבית');
+            if (!instructionsField) {
+                functions.logger.info(`No 'הוראות להמשך טיפול בבית' field found in template ${templateId}.`);
+                return;
+            }
+
+            // 3. Get the content from the instance data
+            const instructionsContent = instanceData[instructionsField.id];
+            if (!instructionsContent || typeof instructionsContent !== 'string' || instructionsContent.trim() === '') {
+                functions.logger.info(`Instructions field is empty for instance ${context.params.instanceId}.`);
+                return;
+            }
+
+            // 4. Send the push notification
+            const title = `הנחיות להמשך טיפול מהקליניקה של יסמין`;
+            const body = instructionsContent.trim();
+            const notificationId = `instructions-${context.params.instanceId}`;
+
+            functions.logger.info(`Sending post-treatment instructions to client ${clientId} for instance ${context.params.instanceId}.`);
+            
+            await sendPushNotification(
+                clientId,
+                'clients',
+                title,
+                body,
+                { route: '/my-appointments/history', notificationId: notificationId }
+            );
+
+        } catch (error) {
+            functions.logger.error(`Error sending instructions for instance ${context.params.instanceId}:`, error);
+        }
+    });
