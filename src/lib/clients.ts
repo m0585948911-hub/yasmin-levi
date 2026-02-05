@@ -223,7 +223,9 @@ export async function saveClient(clientData: Omit<Client, 'id' | 'createdAt' | '
             createdAt: Timestamp.now(),
             status: 'new'
         };
-        const docRef = await addDoc(clientsCollection, newClientData);
+        
+        const cleanData = removeUndefined(newClientData);
+        const docRef = await addDoc(clientsCollection, cleanData);
         return toClient(docRef.id, newClientData);
     }
 }
