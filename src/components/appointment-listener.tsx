@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { collection, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, app as firebaseApp } from '@/lib/firebase';
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { PushNotifications, type PushNotification } from "@capacitor/push-notifications";
 import { getMessaging, onMessage } from 'firebase/messaging';
-import { getApp } from 'firebase/app';
 
 
 interface AppNotification {
@@ -148,8 +148,7 @@ export function AppointmentListener({ clientId }: { clientId: string }) {
     if (Capacitor.getPlatform() !== 'web') return;
 
     try {
-        const app = getApp();
-        const messaging = getMessaging(app);
+        const messaging = getMessaging(firebaseApp);
 
         const unsubscribe = onMessage(messaging, (payload) => {
             console.log('Foreground push message received on web:', payload);
