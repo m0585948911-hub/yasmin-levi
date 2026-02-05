@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Suspense, useEffect, useState, useTransition } from "react";
@@ -150,7 +151,7 @@ const ClientFillForm = ({
                     />
                     <Label
                       htmlFor={field.id}
-                      className={cn(isRequired && "font-bold after:content-['*'] after:ml-0.5 after:text-red-500")}
+                      className={cn(isRequired && "font-bold after:content-['*'] after:ml-0.5 after:text-red-500"]}
                     >
                       קראתי, הבנתי ומאשר/ת את התוכן
                     </Label>
@@ -294,6 +295,7 @@ const ViewCompletedFormDialog = ({
                     <div className="p-2 border rounded-md bg-white">
                       {instance.data[field.id] ? (
                         <Image
+                          unoptimized
                           src={instance.data[field.id] as string}
                           alt="חתימה"
                           width={300}
@@ -316,6 +318,7 @@ const ViewCompletedFormDialog = ({
                       {((instance.data[field.id] as string[]) || []).map((imgSrc, idx) => (
                         <div key={idx} className="relative aspect-square w-full">
                           <Image
+                            unoptimized
                             src={imgSrc}
                             alt={`${field.label} ${idx + 1}`}
                             fill
@@ -513,7 +516,7 @@ function MyDocumentsContent() {
 
         <TabsContent value="completed" className="mt-4">
           <Card>
-            <CardHeader><CardTitle>היסטוריית טפסים</CardTitle></CardHeader>
+            <CardHeader><CardTitle>היסטוריית טפסים</CardHeader></CardHeader>
             <CardContent>
               {completedForms.length > 0 ? (
                 <div className="space-y-3">

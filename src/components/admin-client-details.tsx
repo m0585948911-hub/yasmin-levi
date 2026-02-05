@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React from 'react';
@@ -484,7 +483,7 @@ const ViewTreatmentInstanceDialog = ({ isOpen, onOpenChange, instance, template,
                         {(instance.data[field.id] as string[] || []).map((mediaSrc, idx) => (
                             <div key={idx} className="relative aspect-square w-full">
                             {mediaSrc.startsWith('data:image') ? (
-                                <Image src={mediaSrc} alt={`${field.label} ${idx + 1}`} layout="fill" className="object-cover rounded-md border" />
+                                <Image unoptimized src={mediaSrc} alt={`${field.label} ${idx + 1}`} layout="fill" className="object-cover rounded-md border" />
                             ) : (
                                 <video src={mediaSrc} controls className="rounded-md border w-full h-full object-cover bg-black" />
                             )}
@@ -494,7 +493,7 @@ const ViewTreatmentInstanceDialog = ({ isOpen, onOpenChange, instance, template,
                     ) : field.type === 'signature' ? (
                          <div className="p-2 border rounded-md bg-white">
                             {instance.data[field.id] ? (
-                                <Image src={instance.data[field.id] as string} alt="חתימה" width={300} height={150} className="mx-auto object-contain" />
+                                <Image unoptimized src={instance.data[field.id] as string} alt="חתימה" width={300} height={150} className="mx-auto object-contain" />
                             ) : (
                                 <p className="text-muted-foreground text-center">לא נחתם</p>
                             )}
@@ -617,7 +616,7 @@ const ViewSignedFormDialog = ({ isOpen, onOpenChange, instance, template, client
                     {field.type === 'signature' ? (
                          <div className="p-2 border rounded-md bg-white">
                             {instance.data[field.id] ? (
-                                <Image src={instance.data[field.id] as string} alt="חתימה" width={300} height={150} className="mx-auto object-contain" />
+                                <Image unoptimized src={instance.data[field.id] as string} alt="חתימה" width={300} height={150} className="mx-auto object-contain" />
                             ) : (
                                 <p className="text-muted-foreground text-center">לא נחתם</p>
                             )}
@@ -743,7 +742,7 @@ const FillTreatmentForm = ({
   client: Client,
   adminUserName: string,
   isSaving: boolean,
-  initialInstance: FilledFormInstance | null,
+  initialInstance: FilledFormInstance,
 }) => {
   const [formData, setFormData] = useState<{ [fieldId: string]: string | boolean | string[] }>({});
   
@@ -1145,7 +1144,7 @@ const ViewMediaDialog = ({ media, onClose, onDelete }: { media: ClientMedia | nu
                 </DialogHeader>
                 <div className="flex-grow relative my-4 bg-black/80 rounded-md">
                      {media.type === 'image' ? (
-                        <Image src={media.src} alt="Full size" layout="fill" className="object-contain" />
+                        <Image unoptimized src={media.src} alt="Full size" layout="fill" className="object-contain" />
                     ) : (
                         <video src={media.src} controls autoPlay className="w-full h-full object-contain" />
                     )}
@@ -2902,7 +2901,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                             {allClientMedia.map((media, index) => (
                                 <button key={index} onClick={() => setViewingMedia(media)} className="group relative aspect-square w-full overflow-hidden rounded-lg border">
                                      {media.type === 'image' ? (
-                                        <Image src={media.src} alt={`Media ${index + 1}`} layout="fill" className="object-cover transition-transform group-hover:scale-105" />
+                                        <Image unoptimized src={media.src} alt={`Media ${index + 1}`} layout="fill" className="object-cover transition-transform group-hover:scale-105" />
                                     ) : (
                                         <>
                                             <video src={media.src} className="object-cover w-full h-full bg-black" />
@@ -2936,8 +2935,8 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                   </div>
                   <CardDescription>
                     תיעוד כל האינטראקציות והתקשורת עם הלקוח/ה.
-                  </CardDescription>
-                </CardHeader>
+                  </CardHeader>
+                </CardContent>
                 <CardContent>
                   {communicationLogs.length > 0 ? (
                     <div className="space-y-4">
