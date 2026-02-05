@@ -2232,8 +2232,35 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
       toast({ variant: "destructive", title: "שגיאה", description: "לא נמצאה תבנית סיכום המשויכת לשירות זה. יש ליצור תבנית מתאימה בהגדרות." });
       return;
     }
+
+    let initialData = draftInstance?.data || {};
+    const treatmentNumberField = template.fields.find(f => f.label === 'טיפול מספר');
+
+    if (treatmentNumberField && !draftInstance) {
+        const completedTreatmentsCount = clientFormHistory.filter(
+            instance => instance.templateId === template.id && (instance.status === 'completed' || instance.status === 'signed')
+        ).length;
+        
+        const newTreatmentNumber = completedTreatmentsCount + 1;
+        
+        initialData[treatmentNumberField.id] = String(newTreatmentNumber);
+    }
+    
+    const instanceForForm: FilledFormInstance = draftInstance 
+      ? { ...draftInstance, data: initialData }
+      : {
+          instanceId: crypto.randomUUID(),
+          templateId: template.id,
+          templateName: template.name,
+          status: 'draft',
+          assignedAt: new Date().toISOString(),
+          appointmentId: appointment.id,
+          clientId: client.id,
+          data: initialData
+        };
+
     setNoteForAppointment(appointment);
-    setEditingNote(draftInstance || null);
+    setEditingNote(instanceForForm);
     setIsFillingNote(true);
   };
 
@@ -2523,7 +2550,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <ScrollArea className="w-full pb-2">
           <div className="flex w-full justify-end">
-            <TabsList>
+            <TabsList className="grid grid-cols-5 w-full md:w-auto">
                 <TabsTrigger value="communication">תקשורת</TabsTrigger>
                 <TabsTrigger value="photos">מדיה</TabsTrigger>
                 <TabsTrigger value="summaries">סיכומים</TabsTrigger>
