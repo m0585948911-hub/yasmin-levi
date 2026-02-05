@@ -2521,7 +2521,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
       
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-         <ScrollArea className="w-full pb-2">
+        <ScrollArea className="w-full pb-2">
           <div className="flex w-full justify-end">
             <TabsList>
                 <TabsTrigger value="communication">תקשורת</TabsTrigger>
@@ -2531,7 +2531,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                 <TabsTrigger value="overview">סקירה כללית</TabsTrigger>
             </TabsList>
           </div>
-         </ScrollArea>
+        </ScrollArea>
 
         <TabsContent value="overview" className="mt-4">
           <div className="space-y-6" dir="rtl">
@@ -3101,4 +3101,3 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     </div>
   );
 }
-

@@ -53,6 +53,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { saveFormTemplate, getFormTemplates, deleteFormTemplate } from '@/lib/form-templates';
 import type { TreatmentFormTemplate, FormField, FormFieldType } from '@/lib/form-templates';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 
 type FormAssociation = {
@@ -654,11 +655,15 @@ export default function ClientSettingsPage() {
         <h1 className="text-2xl font-bold">הגדרות לקוחות וטפסים</h1>
       </div>
        <Tabs defaultValue="treatment-record" className="w-full" dir="rtl">
-        <TabsList className="w-full flex justify-end">
-            <TabsTrigger value="summaries">סיכומים</TabsTrigger>
-            <TabsTrigger value="pdf-forms">טפסי PDF</TabsTrigger>
-            <TabsTrigger value="treatment-record">תיק טיפול</TabsTrigger>
-        </TabsList>
+        <ScrollArea className="w-full pb-2">
+          <div className="flex w-full justify-end">
+            <TabsList>
+                <TabsTrigger value="summaries">סיכומים</TabsTrigger>
+                <TabsTrigger value="pdf-forms">טפסי PDF</TabsTrigger>
+                <TabsTrigger value="treatment-record">תיק טיפול</TabsTrigger>
+            </TabsList>
+          </div>
+        </ScrollArea>
         <TabsContent value="treatment-record" className="mt-4">
              <Card>
                 <CardHeader>
