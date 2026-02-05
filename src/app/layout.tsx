@@ -3,7 +3,7 @@ import './globals.css';
 import { AppThemeApplicator } from '@/components/app-theme-applicator';
 import { Toaster } from '@/components/ui/toaster';
 import { APP_VERSION } from '@/lib/version';
-import PushNotificationHandlerWrapper from '@/components/PushNotificationHandlerWrapper';
+import NotificationsBootstrap from '@/components/NotificationsBootstrap';
 import { Suspense } from 'react';
 
 export const metadata: Metadata = {
@@ -37,7 +37,7 @@ export default function RootLayout({
 
         {/* חובה ב-Next 15 כאשר יש שימוש ב-useSearchParams בתוך רכיב קליינט */}
         <Suspense fallback={null}>
-          <PushNotificationHandlerWrapper />
+          <NotificationsBootstrap />
         </Suspense>
 
         {children}

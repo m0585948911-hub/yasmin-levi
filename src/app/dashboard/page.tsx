@@ -12,14 +12,12 @@ import { Button } from '@/components/ui/button';
 import { LogOut, Headset, Users, PlusCircle, Settings, Calendar, Loader2, Trash2, FileSignature } from 'lucide-react';
 import Link from 'next/link';
 import { ClientQuote } from '@/components/client-quote';
-import { AppointmentListener } from '@/components/appointment-listener';
 import { getSettingsForClient } from "@/lib/settings";
 import type { AllSettings } from "@/lib/settings-types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Client } from "@/lib/clients";
-import PushNotificationHandler from "@/components/PushNotificationHandler";
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { VersionNotifier } from "@/components/version-notifier";
@@ -249,8 +247,6 @@ function DashboardContent() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <PushNotificationHandler />
-      <AppointmentListener clientId={clientId || ''} />
       <header className="p-4 flex justify-between items-center">
         <Link href={dashboardLink} className="w-20 h-20">
             <Logo className="w-full h-full" />
@@ -412,5 +408,3 @@ export default function DashboardPage() {
     </Suspense>
   );
 }
-
-    
