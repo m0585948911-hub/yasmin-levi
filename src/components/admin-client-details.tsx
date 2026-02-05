@@ -65,7 +65,7 @@ import { useAdminUser } from '@/hooks/use-admin-user';
 import type { AllSettings } from '@/lib/settings-types';
 import { collection, doc, writeBatch, query, where, getDocs, onSnapshot, addDoc, setDoc, deleteDoc, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { getFormTemplates, deleteFormInstance, type TreatmentFormTemplate, type FormField, type FilledFormInstance, type SignatureDetails } from '@/lib/form-templates';
+import { getFormTemplates, deleteFormInstance, type TreatmentFormTemplate, type FormField, type FormFieldType, type FilledFormInstance, type SignatureDetails } from '@/lib/form-templates';
 import { BirthDateSelector } from './birth-date-selector';
 import { SignaturePad } from './signature-pad';
 import { User, getUsers } from '@/lib/users';
@@ -148,6 +148,30 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
     settings: AllSettings | null,
     logoUrl: string | null,
 }>(({ instance, template, client, adminUserName, settings, logoUrl }, ref) => {
+    
+    // Grouping logic
+    const sortedFields = template.fields.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const fieldGroups: (FormField | FormField[])[] = [];
+    let currentGroup: FormField[] = [];
+    
+    const isColumnar = (type: FormFieldType) => ['text', 'select', 'checkbox'].includes(type);
+
+    sortedFields.forEach(field => {
+        if (field.type === 'title' || field.type === 'subtitle' || !isColumnar(field.type)) {
+            if (currentGroup.length > 0) {
+                fieldGroups.push(currentGroup);
+            }
+            currentGroup = [];
+            fieldGroups.push(field);
+        } else {
+            currentGroup.push(field);
+        }
+    });
+
+    if (currentGroup.length > 0) {
+        fieldGroups.push(currentGroup);
+    }
+
     return (
         <div ref={ref} className="p-8 bg-white text-black font-sans" style={{ width: '210mm' }}>
             <header className="flex justify-between items-center pb-4 border-b-2 border-gray-200">
@@ -174,52 +198,58 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
                 </div>
 
                 <div className="space-y-4">
-                    {template.fields.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).map(field => {
-                        if (field.type === 'title') {
-                            return <h3 key={field.id} className="text-lg font-semibold pt-4 border-b pb-1 mb-2">{field.label}</h3>;
-                        }
-                        if (field.type === 'subtitle') {
-                            return <h4 key={field.id} className="text-md font-medium text-gray-600 pt-2">{field.label}</h4>;
-                        }
+                  {fieldGroups.map((group, groupIndex) => {
+                    if (!Array.isArray(group)) {
+                      const field = group;
+                      const value = instance.data[field.id];
+                      
+                      if (field.type === 'title') {
+                          return <h3 key={field.id} className="text-lg font-semibold pt-4 border-b pb-1 mb-2">{field.label}</h3>;
+                      }
+                      if (field.type === 'subtitle') {
+                          return <h4 key={field.id} className="text-md font-medium text-gray-600 pt-2">{field.label}</h4>;
+                      }
 
-                        const value = instance.data[field.id];
-                        let displayValue: React.ReactNode = '-';
-                        
-                        if (field.type === 'signature') {
-                            displayValue = value ? (
-                                <div className="border p-1 mt-1 bg-white inline-block">
-                                    <img src={value as string} alt="חתימה" style={{ width: '200px', height: '100px', objectFit: 'contain' }} />
-                                </div>
-                            ) : '-';
-                        } else if (field.type === 'image') {
-                           displayValue = (
-                                <div className="flex flex-wrap gap-2 mt-1">
-                                    {(value as string[] || []).map((mediaSrc, idx) => (
-                                        <div key={idx} className="w-32 h-32 relative border rounded">
-                                            {mediaSrc.startsWith('data:image') ? (
-                                                <img src={mediaSrc} alt={`${field.label} ${idx + 1}`} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
-                                            ) : (
-                                                <div className="w-full h-full bg-black text-white flex items-center justify-center">וידאו</div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                           );
-                        } else if (typeof value === 'boolean') {
-                            displayValue = value ? 'כן' : 'לא';
-                        } else if (Array.isArray(value)) {
-                            displayValue = value.join(', ');
-                        } else if (value) {
-                             displayValue = <p className="whitespace-pre-wrap">{String(value)}</p>;
-                        }
+                      let displayValue: React.ReactNode = '-';
+                      if (field.type === 'signature') {
+                          displayValue = value ? <div className="border p-1 mt-1 bg-white inline-block"><img src={value as string} alt="חתימה" style={{ width: '200px', height: '100px', objectFit: 'contain' }} /></div> : '-';
+                      } else if (field.type === 'image') {
+                         displayValue = (<div className="flex flex-wrap gap-2 mt-1">{(value as string[] || []).map((mediaSrc, idx) => (<div key={idx} className="w-32 h-32 relative border rounded">{mediaSrc.startsWith('data:image') ? (<img src={mediaSrc} alt={`${field.label} ${idx + 1}`} style={{width: '100%', height: '100%', objectFit: 'cover'}} />) : (<div className="w-full h-full bg-black text-white flex items-center justify-center">וידאו</div>)}</div>))}</div>);
+                      } else if (value) {
+                           displayValue = <p className="whitespace-pre-wrap">{String(value)}</p>;
+                      }
+                      
+                      return (
+                        <div key={field.id} className="pt-2 text-sm">
+                           <div className="font-semibold col-span-1">{field.label}:</div>
+                           <div className="col-span-2 mt-1">{displayValue}</div>
+                        </div>
+                      )
 
-                        return (
-                            <div key={field.id} className="grid grid-cols-3 gap-2 py-1 items-start">
-                                <div className="font-semibold col-span-1">{field.label}:</div>
-                                <div className="col-span-2">{displayValue}</div>
-                            </div>
-                        );
-                    })}
+                    } else { // It's a group of columnar fields
+                      return (
+                        <div key={`group-${groupIndex}`} className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm pt-2">
+                           {group.map(field => {
+                                const value = instance.data[field.id];
+                                let displayValue: React.ReactNode = '-';
+                                if (typeof value === 'boolean') {
+                                    displayValue = value ? 'כן' : 'לא';
+                                } else if (Array.isArray(value)) {
+                                    displayValue = value.join(', ');
+                                } else if (value) {
+                                     displayValue = String(value);
+                                }
+                                return (
+                                    <div key={field.id} className="border-b pb-1">
+                                        <span className="font-semibold">{field.label}:</span>
+                                        <span className="ml-2">{displayValue}</span>
+                                    </div>
+                                )
+                           })}
+                        </div>
+                      )
+                    }
+                  })}
                 </div>
             </main>
 
@@ -250,6 +280,28 @@ const PrintableSignedForm = React.forwardRef<HTMLDivElement, {
         </div>
     );
     
+    // Grouping logic
+    const sortedFields = template.fields.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const fieldGroups: (FormField | FormField[])[] = [];
+    let currentGroup: FormField[] = [];
+    const isColumnar = (type: FormFieldType) => ['text', 'select', 'checkbox'].includes(type);
+
+    sortedFields.forEach(field => {
+        if (field.type === 'title' || field.type === 'subtitle' || !isColumnar(field.type)) {
+            if (currentGroup.length > 0) {
+                fieldGroups.push(currentGroup);
+            }
+            currentGroup = [];
+            fieldGroups.push(field);
+        } else {
+            currentGroup.push(field);
+        }
+    });
+
+    if (currentGroup.length > 0) {
+        fieldGroups.push(currentGroup);
+    }
+
     return (
         <div ref={ref} className="p-8 bg-white text-black font-sans" style={{ width: '210mm' }}>
             <header className="flex justify-between items-center pb-4 border-b-2 border-gray-200">
@@ -269,41 +321,58 @@ const PrintableSignedForm = React.forwardRef<HTMLDivElement, {
                 <h2 className="text-2xl font-semibold text-center mb-6">{template.name}</h2>
                 
                 <div className="space-y-4">
-                    {template.fields.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).map(field => {
-                        if (field.type === 'personalDetails') {
-                            return <div key={field.id}>{PersonalDetailsSection}</div>;
-                        }
-                        if (field.type === 'title') {
-                            return <h3 key={field.id} className="text-lg font-semibold pt-4 border-b pb-1 mb-2">{field.label}</h3>;
-                        }
-                        if (field.type === 'subtitle') {
-                            return <h4 key={field.id} className="text-md font-medium text-gray-600 pt-2">{field.label}</h4>;
-                        }
+                   {fieldGroups.map((group, groupIndex) => {
+                      if (!Array.isArray(group)) {
+                          const field = group;
+                          const value = instance.data[field.id];
+                          let displayValue: React.ReactNode = '-';
 
-                        const value = instance.data[field.id];
-                        let displayValue: React.ReactNode = '-';
-                        
-                        if (field.type === 'signature') {
-                            displayValue = value ? (
-                                <div className="border p-1 mt-1 bg-white inline-block">
-                                    <img src={value as string} alt="חתימה" style={{ width: '200px', height: '100px', objectFit: 'contain' }} />
-                                </div>
-                            ) : '-';
-                        } else if (typeof value === 'boolean') {
-                            displayValue = value ? 'כן' : 'לא';
-                        } else if (Array.isArray(value)) {
-                            displayValue = value.join(', ');
-                        } else if (value) {
-                             displayValue = <p className="whitespace-pre-wrap">{String(value)}</p>;
-                        }
-
-                        return (
-                            <div key={field.id} className="grid grid-cols-3 gap-2 py-1 items-start">
-                                <div className="font-semibold col-span-1">{field.label}:</div>
-                                <div className="col-span-2">{displayValue}</div>
+                          if (field.type === 'personalDetails') {
+                              return <div key={field.id}>{PersonalDetailsSection}</div>;
+                          }
+                          if (field.type === 'title') {
+                              return <h3 key={field.id} className="text-lg font-semibold pt-4 border-b pb-1 mb-2">{field.label}</h3>;
+                          }
+                          if (field.type === 'subtitle') {
+                              return <h4 key={field.id} className="text-md font-medium text-gray-600 pt-2">{field.label}</h4>;
+                          }
+                          
+                          if (field.type === 'signature') {
+                              displayValue = value ? <div className="border p-1 mt-1 bg-white inline-block"><img src={value as string} alt="חתימה" style={{ width: '200px', height: '100px', objectFit: 'contain' }} /></div> : '-';
+                          } else if (value) {
+                               displayValue = <p className="whitespace-pre-wrap">{String(value)}</p>;
+                          }
+                          
+                          return (
+                            <div key={field.id} className="pt-2 text-sm">
+                               <div className="font-semibold col-span-1">{field.label}:</div>
+                               <div className="col-span-2 mt-1">{displayValue}</div>
                             </div>
-                        );
-                    })}
+                          )
+                      } else { // Columnar group
+                          return (
+                            <div key={`group-${groupIndex}`} className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm pt-2">
+                               {group.map(field => {
+                                    const value = instance.data[field.id];
+                                    let displayValue: React.ReactNode = '-';
+                                    if (typeof value === 'boolean') {
+                                        displayValue = value ? 'כן' : 'לא';
+                                    } else if (Array.isArray(value)) {
+                                        displayValue = value.join(', ');
+                                    } else if (value) {
+                                         displayValue = String(value);
+                                    }
+                                    return (
+                                        <div key={field.id} className="border-b pb-1">
+                                            <span className="font-semibold">{field.label}:</span>
+                                            <span className="ml-2">{displayValue}</span>
+                                        </div>
+                                    )
+                               })}
+                            </div>
+                          )
+                      }
+                   })}
                 </div>
             </main>
 
@@ -3032,3 +3101,4 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     </div>
   );
 }
+
