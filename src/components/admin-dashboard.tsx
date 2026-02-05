@@ -9,7 +9,7 @@ import {
   CardTitle,
   CardFooter
 } from "@/components/ui/card";
-import { Users, Calendar, Ban, Share2, Send, Download, Apple, Smartphone, ArrowRight, CalendarIcon, Loader2, List, Trash2, CheckCircle2, XCircle, MessageSquare, ArrowLeft } from "lucide-react";
+import { Users, Calendar, Ban, Share2, Send, Download, Apple, Smartphone, ArrowRight, CalendarIcon, Loader2, List, Trash2, CheckCircle2, XCircle, MessageSquare, ArrowLeft, DatabaseZap } from "lucide-react";
 import { Button } from "./ui/button";
 import Link from "next/link";
 import { Input } from "./ui/input";
@@ -41,6 +41,7 @@ import {
 import { getAppointments } from "@/lib/appointments";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 import { Badge } from "./ui/badge";
+import { migrateLocalStorageToFirestore } from '@/lib/migration';
 
 
 const notificationSchema = z.object({
@@ -326,6 +327,32 @@ export function AdminDashboard() {
   ]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const { toast } = useToast();
+  
+  const [isMigrating, startMigration] = useTransition();
+  const [migrationProgress, setMigrationProgress] = useState<string | null>(null);
+  const [migrationCompleted, setMigrationCompleted] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('data_migration_completed_v2') === 'true') {
+        setMigrationCompleted(true);
+    }
+  }, []);
+
+  const handleMigration = () => {
+    startMigration(async () => {
+        const result = await migrateLocalStorageToFirestore((message) => {
+            setMigrationProgress(message);
+            toast({ description: message, duration: 2000 });
+        });
+        if (result.success) {
+            toast({ title: 'הצלחה', description: result.message });
+            setMigrationCompleted(true);
+        } else {
+            toast({ variant: 'destructive', title: 'שגיאת העברה', description: result.message });
+        }
+        setMigrationProgress(null);
+    });
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -434,43 +461,55 @@ export function AdminDashboard() {
 
                 return card;
             })}
-            <Card className="flex flex-col">
+             <Card className="flex flex-col">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Download className="h-5 w-5" />
-                        נתוני הורדות
+                        <DatabaseZap className="h-5 w-5" />
+                        העברת נתונים
                     </CardTitle>
                     <CardDescription>
-                        מעקב אחר הורדות האפליקציה.
+                        העבר נתונים ישנים שנשמרו בדפדפן למסד הנתונים בענן.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="flex-grow space-y-2">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Apple className="h-5 w-5" />
-                            <span>אפל</span>
+                <CardContent className="flex-grow">
+                     {isMigrating ? (
+                        <div className="flex items-center gap-2 text-sm">
+                            <Loader2 className="animate-spin h-4 w-4" />
+                            <span>{migrationProgress || 'מעביר נתונים...'}</span>
                         </div>
-                        <span className="font-bold">0</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Smartphone className="h-5 w-5" />
-                            <span>אנדרואיד</span>
+                    ) : migrationCompleted ? (
+                        <div className="flex items-center gap-2 text-sm text-green-600 font-semibold">
+                           <CheckCircle2 className="h-4 w-4" />
+                           <span>העברת הנתונים הושלמה.</span>
                         </div>
-                        <span className="font-bold">0</span>
-                    </div>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">
+                           מומלץ לבצע פעולה זו פעם אחת כדי לסנכרן מידע ישן.
+                        </p>
+                    )}
                 </CardContent>
                 <CardFooter>
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant="link" className="p-0 h-auto" disabled>מעבר לנתונים המלאים</Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>תכונה זו תהיה זמינה בקרוב.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                             <Button disabled={isMigrating || migrationCompleted}>
+                                {migrationCompleted ? 'הושלם' : 'התחל העברה'}
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>האם להתחיל בהעברת נתונים?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    פעולה זו תעתיק נתונים ישנים מהאחסון המקומי של הדפדפן אל מסד הנתונים בענן.
+                                    <br/>
+                                    זוהי פעולה חד-פעמית. האם להמשיך?
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>ביטול</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleMigration}>התחל העברה</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 </CardFooter>
             </Card>
             <Card className="flex flex-col">
