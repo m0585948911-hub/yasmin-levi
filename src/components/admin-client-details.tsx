@@ -63,7 +63,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import { useAdminUser } from '@/hooks/use-admin-user';
 import type { AllSettings } from '@/lib/settings-types';
-import { collection, doc, writeBatch, query, where, getDocs } from 'firebase/firestore';
+import { collection, doc, writeBatch, query, where, getDocs, onSnapshot, addDoc, setDoc, deleteDoc, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getFormTemplates, deleteFormInstance, type TreatmentFormTemplate, type FormField, type FilledFormInstance, type SignatureDetails } from '@/lib/form-templates';
 import { BirthDateSelector } from './birth-date-selector';
@@ -1861,73 +1861,88 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
 
   const { toast } = useToast();
 
-  const fetchData = async (clientId: string, businessId: string) => {
+   useEffect(() => {
+    const clientId = initialClient.id;
+    if (!clientId) {
+      setIsLoading(false);
+      return;
+    }
+    
     setIsLoading(true);
-    const now = new Date();
+
+    const unsubscribes: (() => void)[] = [];
+
+    // Listen to client document
+    unsubscribes.push(onSnapshot(doc(db, 'clients', clientId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const toIso = (date: any): string | null => {
+            if (!date) return null;
+            if (date instanceof Timestamp) return date.toDate().toISOString();
+            if (date instanceof Date) return date.toISOString();
+            return date; // Assume already a string
+        }
+        setClient({ id: docSnap.id, ...data, createdAt: toIso(data.createdAt)!, updatedAt: toIso(data.updatedAt), birthDate: toIso(data.birthDate) } as Client);
+      }
+    }));
+
+    // Listen to appointments
+    unsubscribes.push(onSnapshot(query(collection(db, 'appointments'), where('clientId', '==', clientId)), (snapshot) => {
+      const apps = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, start: (doc.data().start as Timestamp).toDate().toISOString(), end: (doc.data().end as Timestamp).toDate().toISOString() })) as Appointment[];
+      const sortedAppointments = apps.sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+      setAllClientAppointments(sortedAppointments);
+
+      const now = new Date();
+      const futureApps = sortedAppointments.filter(a => new Date(a.start) >= now && ['scheduled', 'confirmed', 'pending'].includes(a.status));
+      const pastApps = sortedAppointments.filter(a => new Date(a.start) < now);
+
+      setNextAppointment(futureApps[0] || null);
+      setLastAppointment(pastApps[pastApps.length - 1] || null);
+    }));
+
+    // Listen to form instances
+    unsubscribes.push(onSnapshot(query(collection(db, "formInstances"), where("clientId", "==", clientId)), (snapshot) => {
+      const history = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            ...data,
+            instanceId: doc.id,
+            assignedAt: data.assignedAt?.toDate ? data.assignedAt.toDate().toISOString() : data.assignedAt,
+            filledAt: data.filledAt?.toDate ? data.filledAt.toDate().toISOString() : data.filledAt,
+        } as FilledFormInstance;
+      });
+      setClientFormHistory(history);
+    }));
+
+    // Listen to communication logs
+    unsubscribes.push(onSnapshot(query(collection(db, 'clients', clientId, 'communicationLogs'), orderBy('timestamp', 'desc')), (snapshot) => {
+        const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), timestamp: (doc.data().timestamp as Timestamp).toDate().toISOString() })) as CommunicationLog[];
+        setCommunicationLogs(logs);
+    }));
+
+    // Listen to manual media
+    unsubscribes.push(onSnapshot(query(collection(db, 'clients', clientId, 'manualMedia'), orderBy('createdAt', 'desc')), (snapshot) => {
+        const media = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString() }));
+        setManualImages(media);
+    }));
+
+    // One-time fetches
+    Promise.all([getFormTemplates(), getClients(initialClient.businessId), getUsers()]).then(([templates, clients, users]) => {
+      setAllTemplates(templates);
+      setSummaryTemplates(templates.filter(t => t.type === 'summary'));
+      setAllClients(clients);
+      setAdminUsers(users);
+      setIsLoading(false);
+    }).catch(error => {
+        console.error("Error fetching one-time data:", error);
+        setIsLoading(false);
+        toast({variant: 'destructive', title: 'שגיאה', description: 'טעינת נתונים נכשלה'});
+    });
     
-    const fiveYearsAgo = new Date();
-    fiveYearsAgo.setFullYear(now.getFullYear() - 5);
-    const oneYearInFuture = new Date();
-    oneYearInFuture.setFullYear(now.getFullYear() + 1);
+    // Cleanup
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [initialClient.id, initialClient.businessId, toast]);
 
-
-    const [refreshedClient, allAppointments, fetchedTemplates, allClientsData, formInstancesSnapshot, fetchedAdminUsers] = await Promise.all([
-      getClientById(clientId),
-      getAppointments(fiveYearsAgo, oneYearInFuture, businessId, clientId),
-      getFormTemplates(),
-      getClients(businessId),
-      getDocs(query(collection(db, "formInstances"), where("clientId", "==", clientId))),
-      getUsers(),
-    ]);
-
-    if (refreshedClient) {
-      setClient(refreshedClient);
-    }
-
-    const sortedAppointments = allAppointments.sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-    setAllClientAppointments(sortedAppointments);
-
-    const futureApps = sortedAppointments.filter(a => new Date(a.start) >= now && ['scheduled', 'confirmed', 'pending'].includes(a.status));
-    const pastApps = sortedAppointments.filter(a => new Date(a.start) < now);
-
-    setNextAppointment(futureApps[0] || null);
-    setLastAppointment(pastApps[pastApps.length - 1] || null);
-
-    setAllTemplates(fetchedTemplates);
-    setSummaryTemplates(fetchedTemplates.filter(t => t.type === 'summary'));
-    setAllClients(allClientsData);
-    setAdminUsers(fetchedAdminUsers);
-
-    const history = formInstancesSnapshot.docs.map(doc => ({
-        ...doc.data(),
-        instanceId: doc.id,
-        assignedAt: doc.data().assignedAt?.toDate ? doc.data().assignedAt.toDate().toISOString() : doc.data().assignedAt,
-        filledAt: doc.data().filledAt?.toDate ? doc.data().filledAt.toDate().toISOString() : doc.data().filledAt,
-    })) as FilledFormInstance[];
-    
-    setClientFormHistory(history);
-
-    const docs = getFromLocalStorage<any[]>(`client_docs_${clientId}`, []);
-    setUploadedDocs(docs);
-
-    const manual = getFromLocalStorage<any[]>(`client_manual_images_${clientId}`, []);
-    setManualImages(manual);
-    
-    const commLogs = getFromLocalStorage<CommunicationLog[]>(`client_comm_logs_${clientId}`, []);
-    setCommunicationLogs(commLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-
-
-    setIsLoading(false);
-  };
-
-  useEffect(() => {
-    const clientId = client.id;
-    const businessId = client.businessId;
-    if (clientId && businessId) {
-      fetchData(clientId, businessId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client.id, client.businessId]);
 
   const handleSaveClientDetails = async (editedClient: Client) => {
     startMutation(async () => {
@@ -1997,7 +2012,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
         const result = await deleteFormInstance(instanceId);
         if (result.success) {
             toast({ title: 'הצלחה!', description: `הטופס נמחק בהצלחה.` });
-            fetchData(client.id, client.businessId);
+            // The listener will auto-update the UI
         } else {
             toast({ variant: 'destructive', title: 'שגיאה', description: result.error || 'לא ניתן היה למחוק את הטופס.' });
         }
@@ -2065,8 +2080,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
         if (clientUpdate && Object.keys(clientUpdate).length > 0) {
             try {
                 const clientToUpdate = { ...client, ...clientUpdate };
-                const updatedClient = await saveClient(clientToUpdate);
-                setClient(updatedClient); 
+                await saveClient(clientToUpdate);
                 toast({ title: "הצלחה!", description: "פרטי הלקוח עודכנו." });
             } catch (error) {
                 toast({ variant: "destructive", title: "שגיאה", description: "לא ניתן היה לעדכן את פרטי הלקוח." });
@@ -2074,17 +2088,19 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             }
         }
         
-        const existingIndex = clientFormHistory.findIndex(h => h.instanceId === instance.instanceId);
-        let newHistory;
-        if (existingIndex > -1) {
-            newHistory = [...clientFormHistory];
-            newHistory[existingIndex] = instance;
-        } else {
-            newHistory = [...clientFormHistory, instance];
+        const { instanceId, ...dataToSave } = instance;
+        const docRef = doc(db, "formInstances", instanceId);
+
+        // Convert date strings back to Timestamps for Firestore
+        const saveData: any = { ...dataToSave };
+        if (saveData.assignedAt) saveData.assignedAt = Timestamp.fromDate(new Date(saveData.assignedAt));
+        if (saveData.filledAt) saveData.filledAt = Timestamp.fromDate(new Date(saveData.filledAt));
+        if (saveData.signatureDetails?.signedAt) {
+             saveData.signatureDetails.signedAt = Timestamp.fromDate(new Date(saveData.signatureDetails.signedAt));
         }
 
-        setInLocalStorage(`clientTreatmentHistory_${client.id}`, newHistory);
-        setClientFormHistory(newHistory);
+        await setDoc(docRef, saveData, { merge: true });
+
         setIsFillingNote(false);
         setNoteForAppointment(null);
         setEditingNote(null);
@@ -2101,43 +2117,43 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
   };
 
   const handleSaveCommLog = async (logData: Omit<CommunicationLog, 'id'>) => {
-        let updatedLogs;
-        const logWithId = { ...logData, id: editingCommLog?.id || crypto.randomUUID() };
+    if (!client) return;
 
-        if (editingCommLog) {
-            // Update
-            updatedLogs = communicationLogs.map(log => 
-                log.id === editingCommLog.id ? logWithId : log
-            );
-        } else {
-            // Create
-            updatedLogs = [logWithId, ...communicationLogs];
-        }
-        
-        if (logWithId.reminderAt && logWithId.reminderForUserId) {
+    startMutation(async () => {
+        const logId = editingCommLog?.id || doc(collection(db, 'clients', client.id, 'communicationLogs')).id;
+
+        const dataForFirestore: any = {
+            ...logData,
+            timestamp: Timestamp.fromDate(new Date(logData.timestamp)),
+            reminderAt: logData.reminderAt ? Timestamp.fromDate(new Date(logData.reminderAt)) : null,
+        };
+
+        if (logData.reminderAt && logData.reminderForUserId) {
             await createReminder({
-                reminderAt: logWithId.reminderAt,
-                userId: logWithId.reminderForUserId,
+                reminderAt: logData.reminderAt,
+                userId: logData.reminderForUserId,
                 clientId: client.id,
                 clientName: `${client.firstName} ${client.lastName}`,
-                summary: logWithId.summary,
-                commLogId: logWithId.id,
+                summary: logData.summary,
+                commLogId: logId,
             });
             toast({ title: 'תזכורת נוצרה', description: 'התזכורת תשלח למנהל בזמן שנקבע.' });
         }
         
-        setCommunicationLogs(updatedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-        setInLocalStorage(`client_comm_logs_${client.id}`, updatedLogs);
-        
+        await setDoc(doc(db, 'clients', client.id, 'communicationLogs', logId), dataForFirestore, { merge: true });
+
         toast({ title: 'הצלחה', description: 'רישום התקשורת נשמר.' });
         setEditingCommLog(null);
+        setIsCommLogDialogOpen(false);
+    });
   };
   
   const handleDeleteCommLog = (logId: string) => {
-    const updatedLogs = communicationLogs.filter(log => log.id !== logId);
-    setCommunicationLogs(updatedLogs);
-    setInLocalStorage(`client_comm_logs_${client.id}`, updatedLogs);
-    toast({ title: 'הצלחה', description: 'הרישום נמחק.' });
+    if (!client) return;
+    startMutation(async () => {
+        await deleteDoc(doc(db, 'clients', client.id, 'communicationLogs', logId));
+        toast({ title: 'הצלחה', description: 'הרישום נמחק.' });
+    });
   };
   
   const handleOpenCommLogDialog = (log: CommunicationLog | null) => {
@@ -2158,35 +2174,37 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     (instance) => instance.status === 'pending_client_fill'
   );
 
-  const handleManualImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+   const handleManualImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!client) return;
         const files = Array.from(event.target.files || []);
         if (!files.length) return;
 
-        files.forEach(file => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const dataUrl = e.target?.result as string;
-                const newImage = {
-                    id: crypto.randomUUID(),
-                    dataUrl,
-                    createdAt: new Date().toISOString(),
-                };
-                const updatedImages = [...manualImages, newImage];
-                setManualImages(updatedImages);
-                setInLocalStorage(`client_manual_images_${client.id}`, updatedImages);
-            };
-            reader.readAsDataURL(file);
+        startMutation(async () => {
+            for (const file of files) {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                await new Promise<void>(resolve => {
+                    reader.onload = async (e) => {
+                        const dataUrl = e.target?.result as string;
+                        await addDoc(collection(db, 'clients', client.id, 'manualMedia'), {
+                            dataUrl,
+                            createdAt: Timestamp.now(),
+                        });
+                        resolve();
+                    };
+                });
+            }
+            toast({ title: 'הצלחה!', description: `${files.length} קבצי מדיה הועלו בהצלחה.` });
         });
-
-        toast({ title: 'הצלחה!', description: `${files.length} קבצי מדיה הועלו בהצלחה.` });
     };
 
     const handleDeleteManualImage = (manualId: string) => {
-        const updatedImages = manualImages.filter(img => img.id !== manualId);
-        setManualImages(updatedImages);
-        setInLocalStorage(`client_manual_images_${client.id}`, updatedImages);
-        setViewingMedia(null);
-        toast({ title: 'הצלחה!', description: 'התמונה נמחקה.' });
+        if (!client) return;
+        startMutation(async () => {
+            await deleteDoc(doc(db, 'clients', client.id, 'manualMedia', manualId));
+            setViewingMedia(null);
+            toast({ title: 'הצלחה!', description: 'המדיה נמחקה.' });
+        });
     };
     
      const allClientMedia: ClientMedia[] = useMemo(() => {
@@ -2865,7 +2883,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
           onOpenChange={setIsFamilyModalOpen}
           client={client}
           allClients={allClients}
-          onUpdate={() => fetchData(client.id, client.businessId)}
+          onUpdate={() => { /* Listener will handle updates */ }}
         />
         <Dialog open={isSignDocModalOpen} onOpenChange={(open) => {
                 if (!open) { setIsSignDocModalOpen(false) }
@@ -2880,7 +2898,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             isOpen={isSendFormsDialogOpen}
             onOpenChange={setIsSendFormsDialogOpen}
             clientId={client.id}
-            onSend={() => fetchData(client.id, client.businessId)}
+            onSend={() => { /* Listener will handle updates */ }}
         />
         <ViewTreatmentInstanceDialog
             isOpen={!!viewingInstance}
