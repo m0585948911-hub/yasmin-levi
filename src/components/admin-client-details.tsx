@@ -140,7 +140,7 @@ const flagSeverityColors: { [key: string]: string } = {
   high: "bg-red-100 text-red-800",
 };
 
-const FamilyManagementDialog = ({
+function FamilyManagementDialog({
     isOpen, onOpenChange, client, allClients, onUpdate
 }: {
     isOpen: boolean;
@@ -148,7 +148,7 @@ const FamilyManagementDialog = ({
     client: Client;
     allClients: Client[];
     onUpdate: () => void;
-}) => {
+}) {
     const [relations, setRelations] = useState<FamilyRelation[]>(client.familyRelations || []);
     const [isMutating, startMutation] = useTransition();
     const { toast } = useToast();
@@ -297,13 +297,13 @@ const FamilyManagementDialog = ({
     )
 }
 
-const TreatmentSummaryTable = ({
+function TreatmentSummaryTable({
     instances,
     templates,
 }: {
     instances: FilledFormInstance[];
     templates: TreatmentFormTemplate[];
-}) => {
+}) {
     const summaryFields = useMemo(() => {
         const fieldsMap = new Map<string, FormField>();
         templates.forEach(template => {
@@ -769,13 +769,13 @@ const ViewTreatmentInstanceDialog = ({ isOpen, onOpenChange, instance, template,
   );
 }
 
-const ViewSignedFormDialog = ({ isOpen, onOpenChange, instance, template, client }: {
+function ViewSignedFormDialog({ isOpen, onOpenChange, instance, template, client }: {
   isOpen: boolean,
   onOpenChange: (open: boolean) => void,
   instance: FilledFormInstance | null,
   template: TreatmentFormTemplate | null,
   client: Client,
-}) => {
+}) {
   const printableContentRef = useRef<HTMLDivElement>(null);
   const [isPrinting, startPrinting] = useTransition();
   const { toast } = useToast();
@@ -892,7 +892,7 @@ const ViewSignedFormDialog = ({ isOpen, onOpenChange, instance, template, client
 }
 
 
-const CameraCaptureDialog = ({ isOpen, onOpenChange, onCapture }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onCapture: (dataUrl: string) => void }) => {
+function CameraCaptureDialog({ isOpen, onOpenChange, onCapture }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onCapture: (dataUrl: string) => void }) {
     const videoRef = React.useRef<HTMLVideoElement>(null);
     const canvasRef = React.useRef<HTMLCanvasElement>(null);
     const streamRef = React.useRef<MediaStream | null>(null);
@@ -1356,97 +1356,12 @@ const FillTreatmentForm = ({
   );
 };
 
-const ViewCompletedFormDialog = ({ isOpen, onOpenChange, instance, template }: {
-  isOpen: boolean,
-  onOpenChange: (open: boolean) => void,
-  instance: FilledFormInstance | null,
-  template: TreatmentFormTemplate | null
-}) => {
-  if (!instance || !template) return null;
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{template.name}</DialogTitle>
-          <DialogDescription>
-            הושלם בתאריך: {instance.filledAt ? new Date(instance.filledAt).toLocaleString('he-IL') : 'לא צוין'}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          {template.fields
-            .slice()
-            .sort((a, b) => ((a.sortOrder || 0) - (b.sortOrder || 0)))
-            .map(field => {
-              if (field.type === 'title') return <h3 key={field.id} className="text-lg font-semibold pt-4">{field.label}</h3>;
-              if (field.type === 'subtitle') return <h4 key={field.id} className="text-md font-medium text-muted-foreground">{field.label}</h4>;
-
-              if (field.type === 'signature') {
-                return (
-                  <div key={field.id} className="flex flex-col gap-1">
-                    <Label className="font-semibold">{field.label}</Label>
-                    <div className="p-2 border rounded-md bg-white">
-                      {instance.data[field.id] ? (
-                        <Image
-                          unoptimized
-                          src={instance.data[field.id] as string}
-                          alt="חתימה"
-                          width={300}
-                          height={150}
-                          className="mx-auto object-contain"
-                        />
-                      ) : (
-                        <p className="text-muted-foreground text-center">לא נחתם</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={field.id} className="flex flex-col gap-1">
-                  <Label className="font-semibold">{field.label}</Label>
-                  {field.type === 'image' ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
-                      {((instance.data[field.id] as string[]) || []).map((imgSrc, idx) => (
-                        <div key={idx} className="relative aspect-square w-full">
-                          <Image
-                            unoptimized
-                            src={imgSrc}
-                            alt={`${field.label} ${idx + 1}`}
-                            fill
-                            className="object-cover rounded-md border"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-2 text-sm bg-accent rounded-md min-h-[36px] border">
-                      {typeof instance.data[field.id] === 'boolean'
-                        ? (instance.data[field.id] ? 'כן' : 'לא')
-                        : ((instance.data[field.id] as string) || ' - ')}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>סגירה</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-const FlagDialog = ({ onSave, onOpenChange, isOpen, flagToEdit }: {
+function FlagDialog({ onSave, onOpenChange, isOpen, flagToEdit }: {
     onSave: (flag: ClientFlag) => void;
     onOpenChange: (open: boolean) => void;
     isOpen: boolean;
     flagToEdit: ClientFlag | null;
-}) => {
+}) {
     const [reason, setReason] = useState('');
     const [severity, setSeverity] = useState<'low' | 'medium' | 'high'>('low');
 
@@ -1520,7 +1435,7 @@ const FlagDialog = ({ onSave, onOpenChange, isOpen, flagToEdit }: {
     );
 };
 
-const SendFormsDialog = ({
+function SendFormsDialog({
     isOpen, onOpenChange, clientId, onSend, allTemplates
 }: {
     isOpen: boolean;
@@ -1528,7 +1443,7 @@ const SendFormsDialog = ({
     clientId: string;
     onSend: () => void;
     allTemplates: TreatmentFormTemplate[];
-}) => {
+}) {
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
     const [isSending, startSending] = useTransition();
     const { toast } = useToast();
@@ -1623,6 +1538,176 @@ const SendFormsDialog = ({
     );
 };
 
+function ViewMediaDialog({ media, onClose, onDelete }: {
+    media: ClientMedia | null;
+    onClose: () => void;
+    onDelete: (manualId: string) => void;
+}) {
+    const [isDeleting, startDeleteTransition] = useTransition();
+
+    if (!media) return null;
+
+    const handleDelete = () => {
+        if (media.manualId) {
+            startDeleteTransition(() => {
+                onDelete(media.manualId!);
+            });
+        }
+    };
+
+    return (
+        <Dialog open={!!media} onOpenChange={onClose}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>{media.sourceName}</DialogTitle>
+                    <DialogDescription>
+                        צולם בתאריך: {new Date(media.date).toLocaleString('he-IL')}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 flex justify-center">
+                    {media.type === 'image' ? (
+                        <Image unoptimized src={media.src} alt="Media" width={800} height={600} className="max-h-[60vh] object-contain" />
+                    ) : (
+                        <video src={media.src} controls className="max-h-[60vh] w-full" />
+                    )}
+                </div>
+                <DialogFooter className="justify-between">
+                    <div>
+                        {media.sourceType === 'manual' && media.manualId && (
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" disabled={isDeleting}>
+                                        {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 className="mr-2" />}
+                                        מחק
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>האם למחוק מדיה זו?</AlertDialogTitle>
+                                        <AlertDialogDescription>פעולה זו היא סופית.</AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>ביטול</AlertDialogCancel>
+                                        <AlertDialogAction onClick={handleDelete}>מחק</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" asChild>
+                            <a href={media.src} download={`media_${new Date(media.date).toISOString()}.jpg`}>
+                                <Download className="mr-2" />
+                                הורדה
+                            </a>
+                        </Button>
+                        <Button onClick={onClose}>סגור</Button>
+                    </div>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function CommunicationLogDialog({ isOpen, onOpenChange, onSave, logToEdit, adminUsers }: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSave: (log: Omit<CommunicationLog, 'id'>) => void;
+    logToEdit: CommunicationLog | null;
+    adminUsers: User[];
+}) {
+    const [type, setType] = useState<CommunicationLog['type']>('phone');
+    const [summary, setSummary] = useState('');
+    const [addReminder, setAddReminder] = useState(false);
+    const [reminderDateTime, setReminderDateTime] = useState('');
+    const [reminderForUserId, setReminderForUserId] = useState('');
+    const { user: currentUser } = useAdminUser();
+
+    useEffect(() => {
+        if (logToEdit) {
+            setType(logToEdit.type);
+            setSummary(logToEdit.summary);
+            const hasReminder = !!logToEdit.reminderAt;
+            setAddReminder(hasReminder);
+            setReminderDateTime(hasReminder ? format(new Date(logToEdit.reminderAt!), "yyyy-MM-dd'T'HH:mm") : '');
+            setReminderForUserId(logToEdit.reminderForUserId || currentUser?.id || '');
+        } else {
+            // Reset for new log
+            setType('phone');
+            setSummary('');
+            setAddReminder(false);
+            setReminderDateTime('');
+            setReminderForUserId(currentUser?.id || '');
+        }
+    }, [logToEdit, isOpen, currentUser]);
+
+    const handleSave = () => {
+        const logData: Omit<CommunicationLog, 'id'> = {
+            type,
+            summary,
+            timestamp: new Date().toISOString(),
+            reminderAt: addReminder ? new Date(reminderDateTime).toISOString() : null,
+            reminderForUserId: addReminder ? reminderForUserId : null,
+        };
+        onSave(logData);
+    };
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{logToEdit ? 'עריכת רישום תקשורת' : 'הוספת רישום תקשורת'}</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="comm-type">סוג התקשורת</Label>
+                        <Select value={type} onValueChange={(v: CommunicationLog['type']) => setType(v)}>
+                            <SelectTrigger id="comm-type"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="phone">שיחת טלפון</SelectItem>
+                                <SelectItem value="sms">הודעת SMS</SelectItem>
+                                <SelectItem value="whatsapp">הודעת וואטסאפ</SelectItem>
+                                <SelectItem value="email">אימייל</SelectItem>
+                                <SelectItem value="other">אחר</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="comm-summary">סיכום</Label>
+                        <Textarea id="comm-summary" value={summary} onChange={e => setSummary(e.target.value)} placeholder="תאר את נושא השיחה..." />
+                    </div>
+                     <div className="flex items-center space-x-2 space-x-reverse">
+                        <Switch id="add-reminder-switch" checked={addReminder} onCheckedChange={setAddReminder} />
+                        <Label htmlFor="add-reminder-switch">הוסף תזכורת להמשך טיפול</Label>
+                    </div>
+                    {addReminder && (
+                        <div className="p-4 border rounded-md space-y-4 bg-accent/50">
+                             <div className="space-y-2">
+                                <Label htmlFor="reminder-time">תאריך ושעת התזכורת</Label>
+                                <Input id="reminder-time" type="datetime-local" value={reminderDateTime} onChange={e => setReminderDateTime(e.target.value)} />
+                            </div>
+                             <div className="space-y-2">
+                                <Label htmlFor="reminder-user">תזכורת עבור</Label>
+                                <Select value={reminderForUserId} onValueChange={setReminderForUserId}>
+                                    <SelectTrigger id="reminder-user"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {adminUsers.map(u => (
+                                            <SelectItem key={u.id} value={u.id}>{`${u.firstName} ${u.lastName}`}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+                    <Button onClick={handleSave}>שמור</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export function AdminClientDetails({ initialClient }: { initialClient: Client }) {
   const { user } = useAdminUser();
