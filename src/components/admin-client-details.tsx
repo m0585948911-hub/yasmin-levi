@@ -140,6 +140,163 @@ const flagSeverityColors: { [key: string]: string } = {
   high: "bg-red-100 text-red-800",
 };
 
+const FamilyManagementDialog = ({
+    isOpen, onOpenChange, client, allClients, onUpdate
+}: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    client: Client;
+    allClients: Client[];
+    onUpdate: () => void;
+}) => {
+    const [relations, setRelations] = useState<FamilyRelation[]>(client.familyRelations || []);
+    const [isMutating, startMutation] = useTransition();
+    const { toast } = useToast();
+
+    // To add a new relation
+    const [search, setSearch] = useState('');
+    const [selectedClientToAdd, setSelectedClientToAdd] = useState<Client | null>(null);
+    const [selectedRelation, setSelectedRelation] = useState<Relationship>('daughter');
+
+    useEffect(() => {
+        setRelations(client.familyRelations || []);
+    }, [isOpen, client]); // Reset when opening or client changes
+
+    const handleRemoveRelation = (memberId: string) => {
+        setRelations(prev => prev.filter(r => r.memberId !== memberId));
+    };
+
+    const handleAddRelation = () => {
+        if (!selectedClientToAdd) {
+            toast({ title: "שגיאה", description: "יש לבחור לקוח להוספה." });
+            return;
+        }
+        if (relations.some(r => r.memberId === selectedClientToAdd.id)) {
+            toast({ title: "מידע", description: "הלקוח כבר מקושר." });
+            return;
+        }
+        setRelations(prev => [...prev, { memberId: selectedClientToAdd.id, relation: selectedRelation }]);
+        setSelectedClientToAdd(null);
+        setSearch('');
+    };
+
+    const handleSave = () => {
+        startMutation(async () => {
+            const result = await updateFamilyRelations(client.id, relations, allClients);
+            if (result.success) {
+                toast({ title: "הצלחה!", description: "קשרי המשפחה עודכנו." });
+                onUpdate(); // This should trigger a refetch in the parent
+                onOpenChange(false);
+            } else {
+                toast({ variant: "destructive", title: "שגיאה", description: "לא ניתן היה לשמור את השינויים." });
+            }
+        });
+    };
+    
+    const relationOptions: { value: Relationship, label: string }[] = [
+        { value: 'son', label: 'בן' }, { value: 'daughter', label: 'בת' },
+        { value: 'father', label: 'אבא' }, { value: 'mother', label: 'אמא' },
+        { value: 'brother', label: 'אח' }, { value: 'sister', label: 'אחות' },
+    ];
+    
+    const getRelationLabel = (relation: Relationship) => {
+      return relationOptions.find(o => o.value === relation)?.label || relation;
+    };
+    
+    const filteredClientsForSearch = search
+        ? allClients.filter(c =>
+            (c.firstName + " " + c.lastName).toLowerCase().includes(search.toLowerCase()) &&
+            c.id !== client.id &&
+            !relations.some(r => r.memberId === c.id)
+        ).slice(0, 5) // limit results
+        : [];
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>ניהול קשרי משפחה עבור {client.firstName}</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        <Label>קשרים קיימים</Label>
+                        {relations.length > 0 ? (
+                             <ScrollArea className="h-32">
+                                {relations.map(rel => {
+                                    const member = allClients.find(c => c.id === rel.memberId);
+                                    return (
+                                        <div key={rel.memberId} className="flex items-center justify-between p-2 border rounded mb-2">
+                                            <span>{member?.firstName} {member?.lastName} ({getRelationLabel(rel.relation)})</span>
+                                            <Button variant="ghost" size="icon" onClick={() => handleRemoveRelation(rel.memberId)}>
+                                                <Trash2 className="w-4 h-4 text-destructive" />
+                                            </Button>
+                                        </div>
+                                    )
+                                })}
+                            </ScrollArea>
+                        ) : <p className="text-sm text-muted-foreground text-center p-4 border rounded">אין קשרים מוגדרים.</p>}
+                    </div>
+
+                    <Separator />
+                    
+                    <div className="space-y-2">
+                         <Label>הוספת קשר חדש</Label>
+                         <div className="p-4 border rounded space-y-3 bg-accent/50">
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                    <Input 
+                                        placeholder="חפש לקוח להוספה..." 
+                                        value={search} 
+                                        onChange={e => { setSearch(e.target.value); setSelectedClientToAdd(null); }} 
+                                    />
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                    <Command>
+                                        <CommandList>
+                                            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                                            {filteredClientsForSearch.map(c => (
+                                                <CommandItem key={c.id} onSelect={() => {
+                                                    setSelectedClientToAdd(c);
+                                                    setSearch(`${c.firstName} ${c.lastName}`);
+                                                }}>
+                                                    {c.firstName} {c.lastName}
+                                                </CommandItem>
+                                            ))}
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                            {selectedClientToAdd && (
+                                <div className="flex items-end gap-2">
+                                    <div className="flex-grow space-y-1">
+                                        <Label>סוג הקרבה</Label>
+                                         <Select value={selectedRelation} onValueChange={(v: Relationship) => setSelectedRelation(v)}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="בחר קרבה..."/>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {relationOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <Button onClick={handleAddRelation}>הוסף</Button>
+                                </div>
+                            )}
+                         </div>
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+                    <Button onClick={handleSave} disabled={isMutating}>
+                        {isMutating ? <Loader2 className="animate-spin" /> : 'שמור שינויים'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 const TreatmentSummaryTable = ({
     instances,
     templates,
@@ -2524,4 +2681,3 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     
 
     
-
