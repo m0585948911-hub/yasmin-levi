@@ -1520,6 +1520,109 @@ const FlagDialog = ({ onSave, onOpenChange, isOpen, flagToEdit }: {
     );
 };
 
+const SendFormsDialog = ({
+    isOpen, onOpenChange, clientId, onSend, allTemplates
+}: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    clientId: string;
+    onSend: () => void;
+    allTemplates: TreatmentFormTemplate[];
+}) => {
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+    const [isSending, startSending] = useTransition();
+    const { toast } = useToast();
+
+    const nonSummaryTemplates = useMemo(() => allTemplates.filter(t => t.type !== 'summary'), [allTemplates]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSelectedTemplateIds([]);
+        }
+    }, [isOpen]);
+
+    const toggleSelection = (templateId: string) => {
+        setSelectedTemplateIds(prev =>
+            prev.includes(templateId)
+                ? prev.filter(id => id !== templateId)
+                : [...prev, templateId]
+        );
+    };
+
+    const handleSend = () => {
+        if (selectedTemplateIds.length === 0) {
+            toast({ variant: 'destructive', title: 'שגיאה', description: 'יש לבחור לפחות טופס אחד לשליחה.' });
+            return;
+        }
+
+        startSending(async () => {
+            try {
+                const batch = writeBatch(db);
+                const now = new Date();
+
+                selectedTemplateIds.forEach(templateId => {
+                    const template = nonSummaryTemplates.find(t => t.id === templateId);
+                    if (template) {
+                        const newInstanceRef = doc(collection(db, 'formInstances'));
+                        batch.set(newInstanceRef, {
+                            templateId: template.id,
+                            templateName: template.name,
+                            clientId: clientId,
+                            status: 'pending_client_fill',
+                            assignedAt: Timestamp.fromDate(now),
+                            data: {},
+                        });
+                    }
+                });
+
+                await batch.commit();
+                toast({ title: 'הצלחה!', description: `${selectedTemplateIds.length} טפסים נשלחו ללקוח למילוי.` });
+                onSend();
+                onOpenChange(false);
+
+            } catch (error) {
+                console.error("Error sending forms:", error);
+                toast({ variant: 'destructive', title: 'שגיאה', description: 'לא ניתן היה לשלוח את הטפסים.' });
+            }
+        });
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>שליחת טפסים למילוי</DialogTitle>
+                    <DialogDescription>
+                        בחר את הטפסים שברצונך לשלוח ללקוח. הלקוח יקבל התראה וימצא אותם באזור "המסמכים שלי".
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <ScrollArea className="h-64">
+                        <div className="space-y-2 pr-2">
+                            {nonSummaryTemplates.map(template => (
+                                <div key={template.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-accent">
+                                    <Checkbox
+                                        id={`template-${template.id}`}
+                                        checked={selectedTemplateIds.includes(template.id)}
+                                        onCheckedChange={() => toggleSelection(template.id)}
+                                    />
+                                    <Label htmlFor={`template-${template.id}`} className="flex-grow cursor-pointer">{template.name}</Label>
+                                </div>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+                    <Button onClick={handleSend} disabled={isSending || selectedTemplateIds.length === 0}>
+                        {isSending ? <Loader2 className="animate-spin" /> : 'שלח טפסים'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 
 export function AdminClientDetails({ initialClient }: { initialClient: Client }) {
   const { user } = useAdminUser();
@@ -2652,6 +2755,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             isOpen={isSendFormsDialogOpen}
             onOpenChange={setIsSendFormsDialogOpen}
             clientId={client.id}
+            allTemplates={allTemplates}
             onSend={() => { /* Listener will handle updates */ }}
         />
         <ViewTreatmentInstanceDialog
@@ -2677,7 +2781,3 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     </div>
   );
 }
-
-    
-
-    
