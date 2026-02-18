@@ -140,6 +140,84 @@ const flagSeverityColors: { [key: string]: string } = {
   high: "bg-red-100 text-red-800",
 };
 
+const TreatmentSummaryTable = ({
+    instances,
+    templates,
+}: {
+    instances: FilledFormInstance[];
+    templates: TreatmentFormTemplate[];
+}) => {
+    const summaryFields = useMemo(() => {
+        const fieldsMap = new Map<string, FormField>();
+        templates.forEach(template => {
+            (template.fields || []).forEach(field => {
+                if (field.showInSummary && !fieldsMap.has(field.label)) {
+                    fieldsMap.set(field.label, field);
+                }
+            });
+        });
+        return Array.from(fieldsMap.values()).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    }, [templates]);
+
+    const instancesWithTemplate = useMemo(() => 
+        instances
+          .filter(instance => instance.status === 'completed' || instance.status === 'signed')
+          .map(instance => ({
+              instance,
+              template: templates.find(t => t.id === instance.templateId)
+          }))
+          .filter((item): item is { instance: FilledFormInstance; template: TreatmentFormTemplate } => !!item.template),
+        [instances, templates]
+    );
+
+    if (instancesWithTemplate.length === 0) {
+        return <p className="text-sm text-center text-muted-foreground py-4">אין סיכומי טיפולים להצגה.</p>;
+    }
+
+
+    return (
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>תאריך</TableHead>
+                    {summaryFields.map(field => (
+                        <TableHead key={field.id}>{field.label}</TableHead>
+                    ))}
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {instancesWithTemplate.map(({ instance, template }) => (
+                    <TableRow key={instance.instanceId}>
+                        <TableCell className="font-medium">
+                            {instance.filledAt ? format(new Date(instance.filledAt), 'dd/MM/yy') : '-'}
+                        </TableCell>
+                        {summaryFields.map(summaryField => {
+                            const fieldInInstanceTemplate = template.fields.find(f => f.label === summaryField.label);
+                            const value = fieldInInstanceTemplate ? instance.data[fieldInInstanceTemplate.id] : undefined;
+                            
+                            let displayValue: React.ReactNode = '-';
+                            if (typeof value === 'boolean') {
+                                displayValue = value ? 'כן' : 'לא';
+                            } else if (Array.isArray(value)) {
+                                displayValue = value.join(', ');
+                            } else if (value) {
+                                displayValue = String(value);
+                            }
+
+                            return (
+                                <TableCell key={`${instance.instanceId}-${summaryField.id}`}>
+                                    {displayValue}
+                                </TableCell>
+                            );
+                        })}
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
+    );
+};
+
+
 const PrintableSummary = React.forwardRef<HTMLDivElement, {
     instance: FilledFormInstance,
     template: TreatmentFormTemplate,
