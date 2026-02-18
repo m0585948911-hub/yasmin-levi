@@ -151,7 +151,7 @@ const ClientFillForm = ({
                     />
                     <Label
                       htmlFor={field.id}
-                      className={cn(isRequired && "font-bold after:content-['*'] after:ml-0.5 after:text-red-500"]}
+                      className={cn(isRequired && "font-bold after:content-['*'] after:ml-0.5 after:text-red-500")}
                     >
                       קראתי, הבנתי ומאשר/ת את התוכן
                     </Label>
@@ -516,7 +516,7 @@ function MyDocumentsContent() {
 
         <TabsContent value="completed" className="mt-4">
           <Card>
-            <CardHeader><CardTitle>היסטוריית טפסים</CardHeader></CardHeader>
+            <CardHeader><CardTitle>היסטוריית טפסים</CardTitle></CardHeader>
             <CardContent>
               {completedForms.length > 0 ? (
                 <div className="space-y-3">
