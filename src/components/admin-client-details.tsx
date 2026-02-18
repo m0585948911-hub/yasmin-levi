@@ -1121,864 +1121,90 @@ const FillTreatmentForm = ({
   );
 };
 
-const ViewMediaDialog = ({ media, onClose, onDelete }: { media: ClientMedia | null; onClose: () => void; onDelete: (manualId: string) => void; }) => {
-    if (!media) return null;
-
-    const handleDownload = () => {
-        const link = document.createElement('a');
-        link.href = media.src;
-        const extension = media.type === 'video' ? 'mp4' : 'jpeg';
-        link.download = `media_${new Date(media.date).getTime()}.${extension}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    return (
-        <Dialog open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
-            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-                <DialogHeader>
-                    <DialogTitle>מדיה מתוך: {media.sourceName}</DialogTitle>
-                    <DialogDescription>
-                        צולם בתאריך: {new Date(media.date).toLocaleString('he-IL')}
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="flex-grow relative my-4 bg-black/80 rounded-md">
-                     {media.type === 'image' ? (
-                        <Image unoptimized src={media.src} alt="Full size" layout="fill" className="object-contain" />
-                    ) : (
-                        <video src={media.src} controls autoPlay className="w-full h-full object-contain" />
-                    )}
-                </div>
-                <DialogFooter className="justify-between">
-                    <div>
-                        {media.sourceType === 'manual' && media.manualId && (
-                           <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="destructive">
-                                    <Trash2 className="mr-2" /> מחק
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader><AlertDialogTitle>האם למחוק את המדיה?</AlertDialogTitle></AlertDialogHeader>
-                                <AlertDialogDescription>פעולה זו היא סופית ולא ניתן לשחזר אותה.</AlertDialogDescription>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>ביטול</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => onDelete(media.manualId!)}>מחק מדיה</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                           </AlertDialog>
-                        )}
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" onClick={onClose}>סגור</Button>
-                        <Button onClick={handleDownload}>
-                            <Download className="mr-2" /> הורדה
-                        </Button>
-                    </div>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-const flagTypes: { value: ClientFlag['type']; label: string }[] = [
-  { value: 'allergy', label: 'אלרגיה' },
-  { value: 'meds', label: 'תרופות' },
-  { value: 'keloid', label: 'נטייה לקלואידים' },
-  { value: 'pregnancy', label: 'הריון / הנקה' },
-  { value: 'skinCondition', label: 'מצב עור מיוחד' },
-  { value: 'pihRisk', label: 'סיכון ל-PIH' },
-  { value: 'diabetes', label: 'סכרת' },
-  { value: 'priorReaction', label: 'תגובה קודמת' },
-  { value: 'operational', label: 'תפעולי' },
-];
-
-const severityLevels: { value: ClientFlag['severity']; label: string }[] = [
-  { value: 'low', label: 'נמוכה' },
-  { value: 'medium', label: 'בינונית' },
-  { value: 'high', label: 'גבוהה' },
-];
-
-
-const FlagDialog = ({ onSave, onOpenChange, isOpen, flagToEdit }: {
-    onSave: (flag: ClientFlag) => void;
-    onOpenChange: (isOpen: boolean) => void;
-    isOpen: boolean;
-    flagToEdit: ClientFlag | null;
+const ViewCompletedFormDialog = ({ isOpen, onOpenChange, instance, template }: {
+  isOpen: boolean,
+  onOpenChange: (open: boolean) => void,
+  instance: FilledFormInstance | null,
+  template: TreatmentFormTemplate | null
 }) => {
-    const [type, setType] = useState<ClientFlag['type']>('operational');
-    const [reason, setReason] = useState('');
-    const [severity, setSeverity] = useState<ClientFlag['severity']>('low');
-    const { toast } = useToast();
+  if (!instance || !template) return null;
 
-    useEffect(() => {
-        if (flagToEdit) {
-            setType(flagToEdit.type);
-            setReason(flagToEdit.reason);
-            setSeverity(flagToEdit.severity);
-        } else {
-            // Reset for new flag
-            setType('operational');
-            setReason('');
-            setSeverity('low');
-        }
-    }, [flagToEdit, isOpen]);
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{template.name}</DialogTitle>
+          <DialogDescription>
+            הושלם בתאריך: {instance.filledAt ? new Date(instance.filledAt).toLocaleString('he-IL') : 'לא צוין'}
+          </DialogDescription>
+        </DialogHeader>
 
-    const handleSave = () => {
-        if (!reason.trim()) {
-            toast({ variant: 'destructive', title: 'שגיאה', description: 'יש להזין סיבה לדגל.' });
-            return;
-        }
+        <div className="space-y-4 py-4">
+          {template.fields
+            .slice()
+            .sort((a, b) => ((a.sortOrder || 0) - (b.sortOrder || 0)))
+            .map(field => {
+              if (field.type === 'title') return <h3 key={field.id} className="text-lg font-semibold pt-4">{field.label}</h3>;
+              if (field.type === 'subtitle') return <h4 key={field.id} className="text-md font-medium text-muted-foreground">{field.label}</h4>;
 
-        const flagData: ClientFlag = {
-            type,
-            reason,
-            severity,
-            active: true,
-            createdAtIso: flagToEdit?.createdAtIso || new Date().toISOString(),
-            lastChangedAtIso: new Date().toISOString(),
-            source: 'clinician',
-        };
-
-        onSave(flagData);
-        onOpenChange(false);
-    };
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{flagToEdit ? 'עריכת דגל' : 'הוספת דגל חדש'}</DialogTitle>
-                    <DialogDescription>
-                        דגלים עוזרים לך לזכור מידע חשוב על הלקוח/ה.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="flag-type">סוג הדגל</Label>
-                        <Select value={type} onValueChange={(v) => setType(v as ClientFlag['type'])}>
-                            <SelectTrigger id="flag-type">
-                                <SelectValue placeholder="בחר סוג..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {flagTypes.map(ft => <SelectItem key={ft.value} value={ft.value}>{ft.label}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+              if (field.type === 'signature') {
+                return (
+                  <div key={field.id} className="flex flex-col gap-1">
+                    <Label className="font-semibold">{field.label}</Label>
+                    <div className="p-2 border rounded-md bg-white">
+                      {instance.data[field.id] ? (
+                        <Image
+                          unoptimized
+                          src={instance.data[field.id] as string}
+                          alt="חתימה"
+                          width={300}
+                          height={150}
+                          className="mx-auto object-contain"
+                        />
+                      ) : (
+                        <p className="text-muted-foreground text-center">לא נחתם</p>
+                      )}
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="flag-reason">סיבה / פירוט</Label>
-                        <Textarea id="flag-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="לדוגמה: אלרגיה לפניצילין, לקוחה שמאחרת תמיד..." />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="flag-severity">רמת חומרה</Label>
-                        <Select value={severity} onValueChange={(v) => setSeverity(v as ClientFlag['severity'])}>
-                             <SelectTrigger id="flag-severity">
-                                <SelectValue placeholder="בחר רמת חומרה..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {severityLevels.map(sl => <SelectItem key={sl.value} value={sl.value}>{sl.label}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
-                    <Button onClick={handleSave}>שמור דגל</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
+                  </div>
+                );
+              }
 
-const SendFormsDialog = ({
-    isOpen,
-    onOpenChange,
-    clientId,
-    onSend
-}: {
-    isOpen: boolean;
-    onOpenChange: (open: boolean) => void;
-    clientId: string;
-    onSend: () => void;
-}) => {
-    const { toast } = useToast();
-    const [isSending, startSendingTransition] = useTransition();
-    const [allTemplates, setAllTemplates] = useState<TreatmentFormTemplate[]>([]);
-    const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
-    
-    useEffect(() => {
-        if (isOpen) {
-            getFormTemplates().then(templates => {
-                // Only show forms that are meant to be filled by the client
-                const clientFillableTemplates = templates.filter(t => t.type === 'treatment');
-                setAllTemplates(clientFillableTemplates);
-            })
-            setSelectedTemplates([]);
-        }
-    }, [isOpen]);
-
-    const handleSend = () => {
-        startSendingTransition(async () => {
-             if (selectedTemplates.length === 0) {
-                toast({ variant: 'destructive', title: 'שגיאה', description: 'יש לבחור לפחות טופס אחד.' });
-                return;
-            }
-
-            const batch = writeBatch(db);
-            const formInstancesCollection = collection(db, "formInstances");
-
-            allTemplates
-                .filter(t => selectedTemplates.includes(t.id))
-                .forEach(template => {
-                    const newInstance = {
-                        clientId: clientId,
-                        templateId: template.id,
-                        templateName: template.name,
-                        status: 'pending_client_fill' as const,
-                        assignedAt: new Date().toISOString(),
-                        data: {},
-                    };
-                    const docRef = doc(formInstancesCollection);
-                    batch.set(docRef, newInstance);
-                });
-            
-            try {
-                await batch.commit();
-                toast({ title: 'הצלחה!', description: 'הטפסים נשלחו ללקוח למילוי.' });
-                onSend();
-                onOpenChange(false);
-            } catch (error) {
-                 console.error("Error sending forms:", error);
-                toast({ variant: 'destructive', title: 'שגיאה', description: 'אירעה שגיאה בשליחת הטפסים.' });
-            }
-        });
-    }
-
-    const handleSelectionChange = (templateId: string) => {
-        setSelectedTemplates(prev => 
-            prev.includes(templateId)
-            ? prev.filter(id => id !== templateId)
-            : [...prev, templateId]
-        );
-    }
-    
-    return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg">
-                <DialogHeader>
-                    <DialogTitle>שליחת טפסים למילוי</DialogTitle>
-                    <DialogDescription>בחר את הטפסים שברצונך לשלוח ללקוח למילוי וחתימה.</DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                    <ScrollArea className="h-72 border rounded-md">
-                        <div className="p-2 space-y-1">
-                            {allTemplates.length > 0 ? (
-                                allTemplates.map(template => (
-                                    <div key={template.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-accent">
-                                        <Checkbox
-                                            id={`template-${template.id}`}
-                                            checked={selectedTemplates.includes(template.id)}
-                                            onCheckedChange={() => handleSelectionChange(template.id)}
-                                        />
-                                        <Label htmlFor={`template-${template.id}`} className="flex-grow cursor-pointer">
-                                            {template.name}
-                                        </Label>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-center text-muted-foreground p-4">
-                                    לא נמצאו תבניות טפסים. ניתן ליצור תבניות חדשות דרך הגדרות לקוח.
-                                </p>
-                            )}
+              return (
+                <div key={field.id} className="flex flex-col gap-1">
+                  <Label className="font-semibold">{field.label}</Label>
+                  {field.type === 'image' ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                      {((instance.data[field.id] as string[]) || []).map((imgSrc, idx) => (
+                        <div key={idx} className="relative aspect-square w-full">
+                          <Image
+                            unoptimized
+                            src={imgSrc}
+                            alt={`${field.label} ${idx + 1}`}
+                            fill
+                            className="object-cover rounded-md border"
+                          />
                         </div>
-                    </ScrollArea>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-2 text-sm bg-accent rounded-md min-h-[36px] border">
+                      {typeof instance.data[field.id] === 'boolean'
+                        ? (instance.data[field.id] ? 'כן' : 'לא')
+                        : ((instance.data[field.id] as string) || ' - ')}
+                    </div>
+                  )}
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
-                    <Button onClick={handleSend} disabled={isSending || selectedTemplates.length === 0}>
-                        {isSending ? <Loader2 className="animate-spin" /> : <Send className="mr-2" />}
-                        שלח למילוי וחתימה
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
-const AddFamilyMemberDialog = ({ onAdd, isChecking }: { onAdd: (phone: string) => void, isChecking: boolean }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [phone, setPhone] = useState('');
-
-    const handleAddClick = () => {
-        onAdd(phone);
-        // Do not close the dialog here, let the parent component handle it
-    };
-
-    return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button className="w-full mt-4">
-                    <PlusCircle className="ml-2" />
-                    הוסף בן משפחה
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>הוספת בן משפחה</DialogTitle>
-                    <DialogDescription>
-                        הקלד את מספר הטלפון של בן המשפחה שברצונך להוסיף.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                    <Label htmlFor="phone">מספר טלפון</Label>
-                    <Input
-                        id="phone"
-                        type="tel"
-                        dir="ltr"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="05X-XXXXXXX"
-                    />
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsOpen(false)}>ביטול</Button>
-                    <Button onClick={handleAddClick} disabled={isChecking}>
-                        {isChecking ? <Loader2 className="animate-spin" /> : 'המשך'}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
-const NewFamilyMemberRegistrationDialog = ({
-    isOpen,
-    onOpenChange,
-    phone,
-    onRegister
-}: {
-    isOpen: boolean,
-    onOpenChange: (open: boolean) => void,
-    phone: string,
-    onRegister: (newClientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>, relation: Relationship) => void;
-}) => {
-    const [firstName, setFirstName] = useState('');
-    const [lastName, setLastName] = useState('');
-    const [gender, setGender] = useState<'male' | 'female'>('female');
-    const [relation, setRelation] = useState<Relationship>('daughter');
-    const [isRegistering, startRegistration] = useTransition();
-
-    const handleRegister = () => {
-        if (!firstName.trim() || !lastName.trim()) {
-            alert('נא למלא שם פרטי ושם משפחה.');
-            return;
-        }
-        startRegistration(async () => {
-            await onRegister({
-                businessId: 'default',
-                firstName,
-                lastName,
-                phone,
-                gender,
-                isBlocked: false,
-                receivesSms: true
-            }, relation);
-        });
-    }
-
-    return (
-         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>רישום בן משפחה חדש</DialogTitle>
-                    <DialogDescription>
-                        מלא את הפרטים של בן המשפחה. מספר הטלפון שהזנת הוא: {phone}
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="firstName">שם פרטי</Label>
-                        <Input id="firstName" value={firstName} onChange={e => setFirstName(e.target.value)} />
-                    </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="lastName">שם משפחה</Label>
-                        <Input id="lastName" value={lastName} onChange={e => setLastName(e.target.value)} />
-                    </div>
-                     <div className="space-y-2">
-                        <Label>מין</Label>
-                        <RadioGroup value={gender} onValueChange={(v: 'male' | 'female') => setGender(v)} className="flex gap-4">
-                            <div className="flex items-center space-x-2 space-x-reverse">
-                                <RadioGroupItem value="female" id="reg-female" />
-                                <Label htmlFor="reg-female">נקבה</Label>
-                            </div>
-                            <div className="flex items-center space-x-2 space-x-reverse">
-                                <RadioGroupItem value="male" id="reg-male" />
-                                <Label htmlFor="reg-male">זכר</Label>
-                            </div>
-                        </RadioGroup>
-                    </div>
-                     <div className="space-y-2">
-                        <Label>קרבה</Label>
-                         <Select value={relation} onValueChange={(v: Relationship) => setRelation(v)}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="בחר קרבה..."/>
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="son">בן</SelectItem>
-                                <SelectItem value="daughter">בת</SelectItem>
-                                <SelectItem value="mother">אמא</SelectItem>
-                                <SelectItem value="father">אבא</SelectItem>
-                                <SelectItem value="brother">אח</SelectItem>
-                                <SelectItem value="sister">אחות</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
-                    <Button onClick={handleRegister} disabled={isRegistering}>
-                        {isRegistering ? <Loader2 className="animate-spin" /> : 'שמור וקשר'}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
-const FamilyManagementDialog = ({
-  isOpen,
-  onOpenChange,
-  client,
-  allClients,
-  onUpdate,
-}: {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  client: Client;
-  allClients: Client[];
-  onUpdate: () => void;
-}) => {
-    const { toast } = useToast();
-    const [isCheckingPhone, startPhoneCheck] = useTransition();
-    const [isSaving, startSaving] = useTransition();
-    const [currentRelations, setCurrentRelations] = useState<FamilyRelation[]>([]);
-    const [confirmClient, setConfirmClient] = useState<Client | null>(null);
-    const [clientToAdd, setClientToAdd] = useState<Client | null>(null);
-    const [isRegisteringNewMember, setIsRegisteringNewMember] = useState(false);
-    const [phoneForRegistration, setPhoneForRegistration] = useState('');
-    const [selectedRelation, setSelectedRelation] = useState<Relationship>('daughter');
-
-    useEffect(() => {
-        if(isOpen) {
-            setCurrentRelations(client.familyRelations || []);
-        }
-    }, [isOpen, client.familyRelations]);
-
-    const handleSaveAllRelations = async (relations: FamilyRelation[]) => {
-      startSaving(async () => {
-        const result = await updateFamilyRelations(client.id, relations, allClients);
-        if (result.success) {
-          toast({ title: 'הצלחה!', description: 'קשרי המשפחה עודכנו.' });
-          onUpdate(); // Refetch data in parent
-        } else {
-          toast({ variant: 'destructive', title: 'שגיאה', description: 'לא ניתן היה לעדכן את קשרי המשפחה.' });
-        }
-      });
-    };
-    
-    const handleAddMember = (phone: string) => {
-        if (!phone.trim()) {
-            toast({ variant: "destructive", title: "שגיאה", description: "יש להזין מספר טלפון." });
-            return;
-        }
-        if (phone.trim() === client.phone) {
-            toast({ variant: "destructive", title: "שגיאה", description: "לא ניתן להוסיף את הלקוח לעצמו." });
-            return;
-        }
-        startPhoneCheck(async () => {
-            const foundClient = allClients.find(c => c.phone.endsWith(phone.trim().slice(-9)));
-            if (foundClient) {
-                if (currentRelations.some(rel => rel.memberId === foundClient.id)) {
-                    toast({ title: "מידע", description: "הלקוח כבר מקושר לחשבונך." });
-                    return;
-                }
-                setConfirmClient(foundClient);
-            } else {
-                setPhoneForRegistration(phone.trim());
-                setIsRegisteringNewMember(true);
-            }
-        });
-    };
-
-    const handleConfirmYes = () => {
-        if (confirmClient) {
-            setClientToAdd(confirmClient);
-            setConfirmClient(null);
-        }
-    };
-    
-    const handleRelationSave = () => {
-        if (clientToAdd) {
-            const newRelation: FamilyRelation = { memberId: clientToAdd.id, relation: selectedRelation };
-            const updatedRelations = [...currentRelations, newRelation];
-            setCurrentRelations(updatedRelations);
-            handleSaveAllRelations(updatedRelations);
-            setClientToAdd(null);
-        }
-    };
-
-    const handleDeleteRelation = (memberId: string) => {
-        const updatedRelations = currentRelations.filter(rel => rel.memberId !== memberId);
-        setCurrentRelations(updatedRelations);
-        handleSaveAllRelations(updatedRelations);
-    };
-
-    const handleRegisterAndLink = async (newClientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt'>, relation: Relationship) => {
-        startSaving(async () => {
-            const newClient = await saveClient(newClientData);
-            onUpdate(); // This will refetch all clients, including the new one
-            
-            const newRelation: FamilyRelation = { memberId: newClient.id, relation };
-            const updatedRelations = [...currentRelations, newRelation];
-            setCurrentRelations(updatedRelations);
-            await handleSaveAllRelations(updatedRelations);
-
-            toast({ title: 'הצלחה!', description: `${newClient.firstName} נוסף למשפחה בהצלחה.`});
-            setIsRegisteringNewMember(false);
-        });
-    };
-    
-    const getRelationName = (relation: Relationship) => {
-        const map: Record<Relationship, string> = {
-          mother: "אמא", father: "אבא", son: "בן", daughter: "בת", sister: "אחות", brother: "אח"
-        };
-        return map[relation] || "";
-    };
-
-    return (
-        <>
-        <Dialog open={isOpen} onOpenChange={(open) => {
-             if (!open) {
-                setClientToAdd(null);
-                setConfirmClient(null);
-                setIsRegisteringNewMember(false);
-                onOpenChange(false);
-             } else {
-                 onOpenChange(true);
-             }
-        }}>
-            <DialogContent className="max-w-md">
-                <DialogHeader>
-                    <DialogTitle>ניהול בני משפחה עבור {client.firstName}</DialogTitle>
-                </DialogHeader>
-                <div className="py-4">
-                    <h4 className="font-semibold mb-2">בני משפחה מקושרים:</h4>
-                    {currentRelations.length > 0 ? (
-                        <ScrollArea className="h-48">
-                            <div className="space-y-2 pr-4">
-                                {currentRelations.map(rel => {
-                                    const member = allClients.find(c => c.id === rel.memberId);
-                                    return (
-                                        <div key={rel.memberId} className="flex items-center justify-between p-2 border rounded-md">
-                                            <div>
-                                                <Link href={`/admin/clients/${rel.memberId}`}>
-                                                    <span className="hover:underline">{member ? `${member.firstName} ${member.lastName}` : 'לקוח לא ידוע'}</span>
-                                                </Link>
-                                                <span className="text-sm text-primary mx-2">({getRelationName(rel.relation)})</span>
-                                            </div>
-                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteRelation(rel.memberId)} disabled={isSaving}>
-                                                <Trash2 className="w-4 h-4 text-destructive" />
-                                            </Button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </ScrollArea>
-                    ) : (
-                        <p className="text-sm text-center text-muted-foreground py-4">
-                            אין כרגע בני משפחה מקושרים.
-                        </p>
-                    )}
-                    <AddFamilyMemberDialog onAdd={handleAddMember} isChecking={isCheckingPhone} />
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>סגירה</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-
-        <AlertDialog open={!!confirmClient} onOpenChange={() => setConfirmClient(null)}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>אישור בן משפחה</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        האם {confirmClient?.firstName} {confirmClient?.lastName} הוא בן המשפחה אותו תרצה/י להוסיף?
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setConfirmClient(null)}>לא</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleConfirmYes}>כן, זהו בן המשפחה</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-
-        <Dialog open={!!clientToAdd} onOpenChange={() => setClientToAdd(null)}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>הגדרת קרבה משפחתית</DialogTitle>
-                    <DialogDescription>
-                        בחר את הקרבה של {client.firstName} ל{clientToAdd?.firstName} {clientToAdd?.lastName}.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                     <Select value={selectedRelation} onValueChange={(v: Relationship) => setSelectedRelation(v)}>
-                        <SelectTrigger><SelectValue placeholder="בחר קרבה..."/></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="son">הוא הבן של</SelectItem>
-                            <SelectItem value="daughter">היא הבת של</SelectItem>
-                            <SelectItem value="mother">היא האמא של</SelectItem>
-                            <SelectItem value="father">הוא האבא של</SelectItem>
-                            <SelectItem value="brother">הוא האח של</SelectItem>
-                            <SelectItem value="sister">היא האחות של</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setClientToAdd(null)}>ביטול</Button>
-                    <Button onClick={handleRelationSave} disabled={isSaving}>
-                        {isSaving ? <Loader2 className="animate-spin"/> : 'שמור קשר'}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-        
-        <NewFamilyMemberRegistrationDialog 
-            isOpen={isRegisteringNewMember}
-            onOpenChange={setIsRegisteringNewMember}
-            phone={phoneForRegistration}
-            onRegister={handleRegisterAndLink}
-        />
-        </>
-    );
-};
-
-const CommunicationLogDialog = ({
-    isOpen,
-    onOpenChange,
-    onSave,
-    logToEdit,
-    adminUsers
-}: {
-    isOpen: boolean;
-    onOpenChange: (open: boolean) => void;
-    onSave: (log: Omit<CommunicationLog, 'id'>) => void;
-    logToEdit: CommunicationLog | null;
-    adminUsers: User[];
-}) => {
-    const [type, setType] = useState<CommunicationLog['type']>('phone');
-    const [summary, setSummary] = useState('');
-    const [timestamp, setTimestamp] = useState(new Date());
-    const [addReminder, setAddReminder] = useState(false);
-    const [reminderAt, setReminderAt] = useState('');
-    const [reminderForUserId, setReminderForUserId] = useState('');
-
-    useEffect(() => {
-        if (logToEdit) {
-            setType(logToEdit.type);
-            setSummary(logToEdit.summary);
-            setTimestamp(new Date(logToEdit.timestamp));
-            setAddReminder(!!logToEdit.reminderAt);
-            setReminderAt(logToEdit.reminderAt ? format(new Date(logToEdit.reminderAt), "yyyy-MM-dd'T'HH:mm") : '');
-            setReminderForUserId(logToEdit.reminderForUserId || '');
-        } else {
-            setType('phone');
-            setSummary('');
-            setTimestamp(new Date());
-            setAddReminder(false);
-            setReminderAt('');
-            setReminderForUserId('');
-        }
-    }, [logToEdit, isOpen]);
-
-    const handleSave = () => {
-        if (!summary.trim()) {
-            alert('יש למלא את סיכום השיחה.');
-            return;
-        }
-        if (addReminder && (!reminderAt || !reminderForUserId)) {
-            alert('כדי להוסיף תזכורת, יש למלא תאריך, שעה, ולבחור מנהל.');
-            return;
-        }
-        onSave({
-            timestamp: timestamp.toISOString(),
-            type,
-            summary,
-            reminderAt: addReminder ? new Date(reminderAt).toISOString() : null,
-            reminderForUserId: addReminder ? reminderForUserId : null,
-        });
-        onOpenChange(false);
-    };
-    
-    return (
-         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{logToEdit ? 'עריכת רישום תקשורת' : 'רישום שיחה חדשה'}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label>תאריך ושעה</Label>
-                        <Input type="datetime-local" value={format(timestamp, "yyyy-MM-dd'T'HH:mm")} onChange={(e) => setTimestamp(new Date(e.target.value))} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>ערוץ תקשורת</Label>
-                        <Select value={type} onValueChange={(v) => setType(v as CommunicationLog['type'])}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="בחר ערוץ..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="phone">שיחת טלפון</SelectItem>
-                                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                                <SelectItem value="sms">SMS</SelectItem>
-                                <SelectItem value="email">אימייל</SelectItem>
-                                <SelectItem value="other">אחר</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="space-y-2">
-                        <Label>סיכום</Label>
-                        <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="סכם את תוכן השיחה או ההודעה..." rows={5} />
-                    </div>
-                    <Separator />
-                     <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                            <Switch id="add-reminder-switch" checked={addReminder} onCheckedChange={setAddReminder} />
-                            <Label htmlFor="add-reminder-switch">הוסף תזכורת</Label>
-                        </div>
-                        {addReminder && (
-                            <div className="pl-6 space-y-4 border-r-2 border-primary/50 pr-4">
-                                <div className="space-y-2">
-                                    <Label>תאריך ושעת תזכורת</Label>
-                                    <Input type="datetime-local" value={reminderAt} onChange={e => setReminderAt(e.target.value)} />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>תזכורת עבור</Label>
-                                     <Select value={reminderForUserId} onValueChange={setReminderForUserId}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="בחר מנהל..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {adminUsers.map(user => (
-                                                <SelectItem key={user.id} value={user.id}>{user.firstName} {user.lastName}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
-                    <Button onClick={handleSave}>שמור רישום</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
-const TreatmentSummaryTable = ({
-    instances,
-    templates,
-}: {
-    instances: FilledFormInstance[];
-    templates: TreatmentFormTemplate[];
-}) => {
-    
-    // 1. Get all unique header labels from fields marked with 'showInSummary'
-    const summaryHeaders = useMemo(() => {
-        const headers = new Set<string>();
-        templates.forEach(template => {
-            template.fields.forEach(field => {
-                if (field.showInSummary && field.label) {
-                    headers.add(field.label);
-                }
-            });
-        });
-        return Array.from(headers);
-    }, [templates]);
-    
-    // 2. Filter for instances that are actually completed/signed
-    const completedInstances = instances
-        .filter(i => i.status === 'completed' || i.status === 'signed')
-        .sort((a,b) => new Date(b.filledAt!).getTime() - new Date(a.filledAt!).getTime());
-
-    // 3. Early exits for empty states
-    if (completedInstances.length === 0) {
-        return (
-            <p className="text-sm text-center text-muted-foreground py-4">
-                אין סיכומי טיפולים להצגה.
-            </p>
-        );
-    }
-
-    if (summaryHeaders.length === 0) {
-        return (
-            <p className="text-sm text-center text-muted-foreground py-4">
-                לא הוגדרו שדות להצגה בסיכום הכללי. ניתן להגדיר זאת במסך הגדרות הטפסים.
-            </p>
-        );
-    }
-    
-    // 4. Render the table
-    return (
-        <div className="w-full overflow-x-auto">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead className="min-w-[100px]">תאריך</TableHead>
-                        <TableHead className="min-w-[150px]">סוג טיפול</TableHead>
-                        {summaryHeaders.map(header => (
-                            <TableHead key={header} className="min-w-[150px]">{header}</TableHead>
-                        ))}
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {completedInstances.map(instance => {
-                        const template = templates.find(t => t.id === instance.templateId);
-                        
-                        return (
-                            <TableRow key={instance.instanceId}>
-                                <TableCell>{instance.filledAt ? format(new Date(instance.filledAt), 'dd/MM/yy') : '-'}</TableCell>
-                                <TableCell>{instance.templateName}</TableCell>
-                                {summaryHeaders.map(headerLabel => {
-                                    let value = '-';
-                                    if (template) {
-                                        const field = template.fields.find(f => f.label === headerLabel && f.showInSummary);
-                                        if (field && instance.data[field.id] !== undefined) {
-                                            const rawValue = instance.data[field.id];
-                                            if (typeof rawValue === 'boolean') {
-                                                value = rawValue ? 'כן' : 'לא';
-                                            } else if (Array.isArray(rawValue)) {
-                                                value = rawValue.join(', ');
-                                            } else if (rawValue) {
-                                                value = String(rawValue);
-                                            }
-                                        }
-                                    }
-
-                                    return <TableCell key={headerLabel}>{value}</TableCell>
-                                })}
-                            </TableRow>
-                        )
-                    })}
-                </TableBody>
-            </Table>
+              );
+            })}
         </div>
-    );
-};
 
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>סגירה</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 export function AdminClientDetails({ initialClient }: { initialClient: Client }) {
   const { user } = useAdminUser();
@@ -2078,7 +1304,15 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
 
     // Listen to communication logs
     unsubscribes.push(onSnapshot(query(collection(db, 'clients', clientId, 'communicationLogs'), orderBy('timestamp', 'desc')), (snapshot) => {
-        const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), timestamp: (doc.data().timestamp as Timestamp).toDate().toISOString() })) as CommunicationLog[];
+        const logs = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                timestamp: (data.timestamp as Timestamp).toDate().toISOString(),
+                reminderAt: data.reminderAt ? (data.reminderAt as Timestamp).toDate().toISOString() : null,
+            } as CommunicationLog;
+        });
         setCommunicationLogs(logs);
     }));
 
@@ -2455,7 +1689,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
           client={client}
           adminUserName={user ? `${user.firstName} ${user.lastName}` : 'מנהל/ת'}
           isSaving={isSavingNote}
-          initialInstance={editingNote}
+          initialInstance={editingNote!}
         />
       </div>
     );
@@ -2974,7 +2208,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                             {log.reminderAt && (
                                 <div className="mt-2 text-xs text-blue-600 bg-blue-50 p-2 rounded-md flex items-center gap-2">
                                     <Bell className="h-3 w-3" />
-                                    <span>תזכורת ל{adminUsers.find(u => u.id === log.reminderForUserId)?.firstName || 'מנהל'} בתאריך {format(new Date(log.reminderAt), "dd/MM/yy HH:mm")}</span>
+                                    <span>תזכורת ל{adminUsers.find(u => u.id === log.reminderForUserId)?.firstName || 'מנהל'} בתאריך {format(new Date(log.reminderAt), "dd/MM/yy HH:mm", { locale: he })}</span>
                                 </div>
                             )}
                           </div>
@@ -3128,5 +2362,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     </div>
   );
 }
+
+    
 
     
