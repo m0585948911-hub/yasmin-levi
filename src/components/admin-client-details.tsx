@@ -260,7 +260,7 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
                 </div>
                 {logoUrl && (
                     <div className="w-24 h-24 relative">
-                        <img src={logoUrl} alt="Logo" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
+                        <Image unoptimized src={logoUrl} alt="Logo" layout="fill" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
                     </div>
                 )}
             </header>
@@ -292,7 +292,7 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
                       if (field.type === 'signature') {
                           displayValue = value ? <div className="border p-1 mt-1 bg-white inline-block"><img src={value as string} alt="חתימה" style={{ width: '200px', height: '100px', objectFit: 'contain' }} /></div> : '-';
                       } else if (field.type === 'image') {
-                         displayValue = (<div className="flex flex-wrap gap-2 mt-1">{(value as string[] || []).map((mediaSrc, idx) => (<div key={idx} className="w-32 h-32 relative border rounded">{mediaSrc.startsWith('data:image') ? (<img src={mediaSrc} alt={`${field.label} ${idx + 1}`} style={{width: '100%', height: '100%', objectFit: 'cover'}} />) : (<div className="w-full h-full bg-black text-white flex items-center justify-center">וידאו</div>)}</div>))}</div>);
+                         displayValue = (<div className="flex flex-wrap gap-2 mt-1">{(value as string[] || []).map((mediaSrc, idx) => (<div key={idx} className="w-32 h-32 relative border rounded">{mediaSrc.startsWith('data:image') ? (<Image unoptimized src={mediaSrc} alt={`${field.label} ${idx + 1}`} layout="fill" style={{width: '100%', height: '100%', objectFit: 'cover'}} />) : (<div className="w-full h-full bg-black text-white flex items-center justify-center">וידאו</div>)}</div>))}</div>);
                       } else if (value) {
                            displayValue = <p className="whitespace-pre-wrap">{String(value)}</p>;
                       }
@@ -390,7 +390,7 @@ const PrintableSignedForm = React.forwardRef<HTMLDivElement, {
                 </div>
                 {logoUrl && (
                     <div className="w-24 h-24 relative">
-                        <img src={logoUrl} alt="Logo" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
+                        <Image unoptimized src={logoUrl} alt="Logo" layout="fill" style={{width: '100%', height: '100%', objectFit: 'contain'}} />
                     </div>
                 )}
             </header>
@@ -1283,6 +1283,86 @@ const ViewCompletedFormDialog = ({ isOpen, onOpenChange, instance, template }: {
     </Dialog>
   );
 };
+
+const FlagDialog = ({ onSave, onOpenChange, isOpen, flagToEdit }: {
+    onSave: (flag: ClientFlag) => void;
+    onOpenChange: (open: boolean) => void;
+    isOpen: boolean;
+    flagToEdit: ClientFlag | null;
+}) => {
+    const [reason, setReason] = useState('');
+    const [severity, setSeverity] = useState<'low' | 'medium' | 'high'>('low');
+
+    useEffect(() => {
+        if (flagToEdit) {
+            setReason(flagToEdit.reason);
+            setSeverity(flagToEdit.severity);
+        } else {
+            setReason('');
+            setSeverity('low');
+        }
+    }, [flagToEdit]);
+
+    const handleSave = () => {
+        if (!reason.trim()) {
+            return;
+        }
+        const now = new Date().toISOString();
+        const newFlag: ClientFlag = {
+            type: 'operational', // Default type for now
+            reason: reason.trim(),
+            severity,
+            active: true,
+            createdAtIso: flagToEdit?.createdAtIso || now,
+            lastChangedAtIso: now,
+            source: 'clinician',
+        };
+        onSave(newFlag);
+        onOpenChange(false);
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{flagToEdit ? 'עריכת דגל' : 'הוספת דגל חדש'}</DialogTitle>
+                    <DialogDescription>
+                        הוסף התראה חשובה שתוצג תמיד בכרטיס הלקוח.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="flag-reason">סיבה</Label>
+                        <Input
+                            id="flag-reason"
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            placeholder="לדוגמה: אלרגיה לפניצילין"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="flag-severity">רמת חומרה</Label>
+                        <Select value={severity} onValueChange={(v: 'low' | 'medium' | 'high') => setSeverity(v)}>
+                            <SelectTrigger id="flag-severity">
+                                <SelectValue placeholder="בחר רמת חומרה" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="low">נמוכה</SelectItem>
+                                <SelectItem value="medium">בינונית</SelectItem>
+                                <SelectItem value="high">גבוהה</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+                    <Button onClick={handleSave}>שמור דגל</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 
 export function AdminClientDetails({ initialClient }: { initialClient: Client }) {
   const { user } = useAdminUser();
@@ -2444,3 +2524,4 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     
 
     
+
