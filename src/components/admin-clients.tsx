@@ -533,6 +533,7 @@ export function AdminClients() {
   const [isAddClientOpen, setIsAddClientOpen] = useState(false);
   const [isImportClientOpen, setIsImportClientOpen] = useState(false);
   const [isMutating, startMutation] = useTransition();
+  const [sortBy, setSortBy] = useState<'createdAt' | 'alphabetical'>('createdAt');
   const { toast } = useToast();
   const { permissions } = useAdminUser();
 
@@ -556,22 +557,31 @@ export function AdminClients() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filteredClients = useMemo(
-    () =>
-      clients.filter((client) => {
+  const sortedAndFilteredClients = useMemo(() => {
+    const filtered = clients.filter((client) => {
         const fullName = `${client.firstName} ${client.lastName}`;
         const term = searchTerm.toLowerCase();
 
         return (
-          fullName.toLowerCase().includes(term) ||
-          (permissions.canViewClientPhone && (client.phone || '').toLowerCase().includes(term))
+            fullName.toLowerCase().includes(term) ||
+            (permissions.canViewClientPhone && (client.phone || '').toLowerCase().includes(term))
         );
-      }),
-    [clients, searchTerm, permissions.canViewClientPhone],
-  );
+    });
+
+    if (sortBy === 'alphabetical') {
+        return filtered.sort((a, b) =>
+            `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'he')
+        );
+    }
+    
+    // Default sort: createdAt descending (newest first)
+    return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  }, [clients, searchTerm, sortBy, permissions.canViewClientPhone]);
+
 
   const handleSelectAll = (checked: boolean) => {
-    if (checked) setSelectedClients(filteredClients.map((c) => c.id));
+    if (checked) setSelectedClients(sortedAndFilteredClients.map((c) => c.id));
     else setSelectedClients([]);
   };
 
@@ -633,7 +643,7 @@ export function AdminClients() {
     fetchClients();
   };
 
-  const isAllSelected = filteredClients.length > 0 && selectedClients.length === filteredClients.length;
+  const isAllSelected = sortedAndFilteredClients.length > 0 && selectedClients.length === sortedAndFilteredClients.length;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-4">
@@ -648,6 +658,15 @@ export function AdminClients() {
           />
         </div>
         <div className="flex items-center gap-2 self-start md:self-center">
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'createdAt' | 'alphabetical')}>
+                <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="מיין לפי..." />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="createdAt">תאריך הוספה</SelectItem>
+                    <SelectItem value="alphabetical">סדר אלפביתי</SelectItem>
+                </SelectContent>
+            </Select>
             <Button className="bg-green-500 hover:bg-green-600" onClick={() => setIsAddClientOpen(true)}>
                 <Plus className="ml-2" />
                 חדש
@@ -709,8 +728,8 @@ export function AdminClients() {
             <div className="flex justify-center items-center h-64">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
             </div>
-        ) : filteredClients.length > 0 ? (
-            filteredClients.map((client) => (
+        ) : sortedAndFilteredClients.length > 0 ? (
+            sortedAndFilteredClients.map((client) => (
                 <Card key={client.id} data-state={selectedClients.includes(client.id) ? 'selected' : ''} className="data-[state=selected]:bg-accent">
                     {/* Desktop View */}
                     <div className="hidden sm:block">
@@ -859,3 +878,5 @@ export function AdminClients() {
     </div>
   );
 }
+
+    
