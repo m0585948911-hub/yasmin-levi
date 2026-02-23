@@ -10,6 +10,11 @@ export const metadata: Metadata = {
   title: 'יסמין לוי',
   description: 'ניהול יומן ומעקב לקוחות',
   manifest: '/manifest.json',
+  icons: {
+    icon: 'https://firebasestorage.googleapis.com/v0/b/yasmin-beauty-diary.firebasestorage.app/o/logo%2Flogo%20yasmin%20levi.png?alt=media&token=27516397-70dc-4e30-a674-4174315b0971',
+    apple:
+      'https://firebasestorage.googleapis.com/v0/b/yasmin-beauty-diary.firebasestorage.app/o/logo%2Flogo%20yasmin%20levi.png?alt=media&token=27516397-70dc-4e30-a674-4174315b0971',
+  },
 };
 
 export const viewport: Viewport = {
