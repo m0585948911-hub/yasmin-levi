@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 const WHATSAPP_SERVICE_URL =
- process.env.WHATSAPP_SERVICE_URL || 'http://localhost:8080';
+ process.env.WHATSAPP_SERVICE_URL || 'https://whatsapp-service-90023766755.us-central1.run.app';
 
 export async function POST() {
  try{

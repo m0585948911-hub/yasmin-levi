@@ -37,7 +37,7 @@ type WhatsAppStatus = {
 export function AdminSettingsWhatsapp() {
   const { toast } = useToast();
 
-  const [phone, setPhone] = useState('972545617619');
+  const [phone, setPhone] = useState('0545617619');
   const [pairingCode, setPairingCode] = useState('');
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [status, setStatus] = useState<WhatsAppStatus>({ ready: false, status: 'loading' });
@@ -97,17 +97,24 @@ export function AdminSettingsWhatsapp() {
     return () => window.clearInterval(id);
   }, [expiresAt]);
 
-  const normalizePhone = (value: string) => value.replace(/\D/g, '').replace(/^0/, '972');
+  const normalizeIsraeliPhone = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (!/^05\d{8}$/.test(digits)) return '';
+    return digits;
+  };
+
+  const toInternationalPhone = (localPhone: string) => `972${localPhone.slice(1)}`;
 
   const handleConnect = () => {
-    const cleanPhone = normalizePhone(phone);
+    const localPhone = normalizeIsraeliPhone(phone);
 
-    if (!cleanPhone || cleanPhone.length < 10) {
-      toast({ variant: 'destructive', title: 'שגיאה', description: 'יש להזין מספר טלפון תקין.' });
+    if (!localPhone) {
+      toast({ variant: 'destructive', title: 'שגיאה', description: 'יש להזין מספר ישראלי תקין בפורמט 05XXXXXXXX.' });
       return;
     }
 
-    setPhone(cleanPhone);
+    setPhone(localPhone);
+    const cleanPhone = toInternationalPhone(localPhone);
 
     startConnectTransition(async () => {
       try {
@@ -229,11 +236,11 @@ export function AdminSettingsWhatsapp() {
                 id="wa-phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="972545617619"
+                placeholder="0509234865"
                 dir="ltr"
               />
               <p className="text-xs text-muted-foreground">
-                יש להזין בפורמט בינלאומי, לדוגמה: 972545617619
+                יש להזין מספר ישראלי רגיל בלבד, לדוגמה: 0509234865
               </p>
             </div>
 
