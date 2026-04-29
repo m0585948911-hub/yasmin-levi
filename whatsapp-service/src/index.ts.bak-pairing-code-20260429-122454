@@ -1,0 +1,132 @@
+import express from 'express';
+import QRCode from 'qrcode';
+import { Client, LocalAuth } from 'whatsapp-web.js';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { startQueueProcessor } from './queue';
+
+const serviceAccount = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+  ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
+  : undefined;
+
+initializeApp(serviceAccount ? { credential: cert(serviceAccount) } : undefined);
+const db = getFirestore();
+
+const app = express();
+const port = process.env.PORT || 8080;
+
+app.use(express.json());
+
+let latestQr: string | null = null;
+let latestQrDataUrl: string | null = null;
+let isReady = false;
+let lastStatus = 'starting';
+
+export const whatsappClient = new Client({
+  authStrategy: new LocalAuth({
+    clientId: process.env.WHATSAPP_SESSION_ID || 'yasmin-main',
+    dataPath: process.env.WHATSAPP_SESSION_PATH || './.wwebjs_auth',
+  }),
+  puppeteer: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/nix/store/lpdrfl6n16q5zdf8acp4bni7yczzcx3h-idx-builtins/bin/chromium',
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  },
+});
+
+whatsappClient.on('qr', async (qr) => {
+  latestQr = qr;
+  latestQrDataUrl = await QRCode.toDataURL(qr);
+  isReady = false;
+  lastStatus = 'qr';
+  console.log('[WHATSAPP WEB] QR generated');
+
+  await db.collection('whatsapp_status').doc('main').set({
+    status: 'qr',
+    ready: false,
+    qr,
+    qrDataUrl: latestQrDataUrl,
+    updatedAt: Timestamp.now(),
+  }, { merge: true });
+});
+
+whatsappClient.on('authenticated', async () => {
+  lastStatus = 'authenticated';
+  console.log('[WHATSAPP WEB] authenticated');
+  await db.collection('whatsapp_status').doc('main').set({
+    status: 'authenticated',
+    updatedAt: Timestamp.now(),
+  }, { merge: true });
+});
+
+whatsappClient.on('ready', async () => {
+  latestQr = null;
+  latestQrDataUrl = null;
+  isReady = true;
+  lastStatus = 'ready';
+  console.log('[WHATSAPP WEB] ready');
+
+  await db.collection('whatsapp_status').doc('main').set({
+    status: 'ready',
+    ready: true,
+    qr: null,
+    qrDataUrl: null,
+    updatedAt: Timestamp.now(),
+  }, { merge: true });
+});
+
+whatsappClient.on('disconnected', async (reason) => {
+  isReady = false;
+  lastStatus = `disconnected: ${reason}`;
+  console.warn('[WHATSAPP WEB] disconnected:', reason);
+
+  await db.collection('whatsapp_status').doc('main').set({
+    status: 'disconnected',
+    ready: false,
+    reason,
+    updatedAt: Timestamp.now(),
+  }, { merge: true });
+});
+
+app.get('/_health', (req, res) => {
+  res.status(200).json({
+    ok: true,
+    ready: isReady,
+    status: lastStatus,
+  });
+});
+
+app.get('/status', (req, res) => {
+  res.json({
+    ok: true,
+    ready: isReady,
+    status: lastStatus,
+    hasQr: !!latestQr,
+  });
+});
+
+app.get('/qr', (req, res) => {
+  res.json({
+    ok: true,
+    ready: isReady,
+    status: lastStatus,
+    qr: latestQr,
+    qrDataUrl: latestQrDataUrl,
+  });
+});
+
+app.post('/logout', async (req, res) => {
+  await whatsappClient.logout();
+  isReady = false;
+  latestQr = null;
+  latestQrDataUrl = null;
+  lastStatus = 'logged_out';
+  res.json({ ok: true });
+});
+
+whatsappClient.initialize();
+startQueueProcessor(db, whatsappClient);
+
+app.listen(port, () => {
+  console.log(`WhatsApp Web service listening on port ${port}`);
+});

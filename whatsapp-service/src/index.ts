@@ -1,10 +1,10 @@
-
 import express from 'express';
+import QRCode from 'qrcode';
+import { Client, LocalAuth } from 'whatsapp-web.js';
 import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { startQueueProcessor } from './queue';
 
-// --- Firebase Admin Initialization ---
 const serviceAccount = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
   ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
   : undefined;
@@ -12,47 +12,202 @@ const serviceAccount = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
 initializeApp(serviceAccount ? { credential: cert(serviceAccount) } : undefined);
 const db = getFirestore();
 
-// --- Express App Initialization ---
 const app = express();
 const port = process.env.PORT || 8080;
 
 app.use(express.json());
 
-// --- Start Queue Processor ---
-startQueueProcessor(db);
+let latestQr: string | null = null;
+let latestQrDataUrl: string | null = null;
+let isReady = false;
+let lastStatus = 'starting';
 
-// --- API Endpoints ---
-
-// Webhook verification endpoint
-app.get('/webhook', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-
-  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    console.log('Webhook verified successfully!');
-    res.status(200).send(challenge);
-  } else {
-    console.error('Webhook verification failed.');
-    res.sendStatus(403);
-  }
+export const whatsappClient = new Client({
+  authStrategy: new LocalAuth({
+    clientId: process.env.WHATSAPP_SESSION_ID || 'yasmin-main',
+    dataPath: process.env.WHATSAPP_SESSION_PATH || './.wwebjs_auth',
+  }),
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+  },
+  puppeteer: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/nix/store/lpdrfl6n16q5zdf8acp4bni7yczzcx3h-idx-builtins/bin/chromium',
+    headless: false,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-sync',
+      '--disable-default-apps',
+      '--no-first-run',
+      '--no-zygote',
+      '--window-size=1280,720'
+    ],
+  },
 });
 
-// Webhook for receiving messages
-app.post('/webhook', (req, res) => {
-  console.log('Received WhatsApp webhook:', JSON.stringify(req.body, null, 2));
-  // Here you would process incoming messages, status updates, etc.
-  // For now, we just log it.
-  res.sendStatus(200);
+whatsappClient.on('qr', async (qr) => {
+  latestQr = qr;
+  latestQrDataUrl = await QRCode.toDataURL(qr);
+  isReady = false;
+  lastStatus = 'qr';
+  console.log('[WHATSAPP WEB] QR generated');
+
+  await db.collection('whatsapp_status').doc('main').set({
+    status: 'qr',
+    ready: false,
+    qr,
+    qrDataUrl: latestQrDataUrl,
+    updatedAt: Timestamp.now(),
+  }, { merge: true });
 });
 
+whatsappClient.on('loading_screen', (percent, message) => {
+  console.log('[WHATSAPP WEB] loading_screen:', percent, message);
+});
+
+whatsappClient.on('auth_failure', (message) => {
+  console.error('[WHATSAPP WEB] auth_failure:', message);
+});
+
+whatsappClient.on('change_state', (state) => {
+  console.log('[WHATSAPP WEB] change_state:', state);
+});
+
+whatsappClient.on('authenticated', async () => {
+  lastStatus = 'authenticated';
+  console.log('[WHATSAPP WEB] authenticated');
+  await db.collection('whatsapp_status').doc('main').set({
+    status: 'authenticated',
+    updatedAt: Timestamp.now(),
+  }, { merge: true });
+});
+
+whatsappClient.on('ready', async () => {
+  latestQr = null;
+  latestQrDataUrl = null;
+  isReady = true;
+  lastStatus = 'ready';
+  console.log('[WHATSAPP WEB] ready');
+
+  await db.collection('whatsapp_status').doc('main').set({
+    status: 'ready',
+    ready: true,
+    qr: null,
+    qrDataUrl: null,
+    updatedAt: Timestamp.now(),
+  }, { merge: true });
+});
+
+whatsappClient.on('disconnected', async (reason) => {
+  isReady = false;
+  lastStatus = `disconnected: ${reason}`;
+  console.warn('[WHATSAPP WEB] disconnected:', reason);
+
+  await db.collection('whatsapp_status').doc('main').set({
+    status: 'disconnected',
+    ready: false,
+    reason,
+    updatedAt: Timestamp.now(),
+  }, { merge: true });
+});
 
 app.get('/_health', (req, res) => {
-  // Simple health check endpoint
-  res.status(200).send('OK');
+  res.status(200).json({
+    ok: true,
+    ready: isReady,
+    status: lastStatus,
+  });
+});
+
+app.get('/status', (req, res) => {
+  res.json({
+    ok: true,
+    ready: isReady,
+    status: lastStatus,
+    hasQr: !!latestQr,
+  });
+});
+
+app.get('/qr', (req, res) => {
+  res.json({
+    ok: true,
+    ready: isReady,
+    status: lastStatus,
+    qr: latestQr,
+    qrDataUrl: latestQrDataUrl,
+  });
 });
 
 
+app.post('/connect', async (req,res) => {
+ try{
+   const phone=(req.body?.phone||'').replace(/\D/g,'');
+   if(!phone){
+     return res.status(400).json({error:'missing phone'});
+   }
+
+   const code=await whatsappClient.requestPairingCode(phone);
+
+   await db.collection('whatsapp_status').doc('main').set({
+      status:'pairing',
+      pairingPhone: phone,
+      pairingCode: code,
+      codeExpiresAt: Timestamp.fromMillis(Date.now()+5*60*1000),
+      updatedAt: Timestamp.now()
+   },{merge:true});
+
+   return res.json({
+      ok:true,
+      status:'pairing',
+      code,
+      expiresIn:300
+   });
+
+ } catch(e){
+   console.error(e);
+   return res.status(500).json({
+      error:'pairing failed'
+   });
+ }
+});
+
+app.post('/logout', async (req, res) => {
+  await whatsappClient.logout();
+  isReady = false;
+  latestQr = null;
+  latestQrDataUrl = null;
+  lastStatus = 'logged_out';
+  res.json({ ok: true });
+});
+
+whatsappClient.initialize();
+
+const pairingPhone = process.env.WHATSAPP_PAIRING_PHONE;
+
+if (pairingPhone) {
+  whatsappClient.once('qr', async () => {
+    try {
+      const code = await whatsappClient.requestPairingCode(pairingPhone);
+      console.log('');
+      console.log('======================================');
+      console.log('WHATSAPP PAIRING CODE:', code);
+      console.log('Use WhatsApp > Linked devices > Link with phone number');
+      console.log('Phone:', pairingPhone);
+      console.log('======================================');
+      console.log('');
+    } catch (error) {
+      console.error('[WHATSAPP WEB] pairing code error:', error);
+    }
+  });
+}
+
+startQueueProcessor(db, whatsappClient);
+
 app.listen(port, () => {
-  console.log(`WhatsApp service (Webhook Mode) listening on port ${port}`);
+  console.log(`WhatsApp Web service listening on port ${port}`);
 });
