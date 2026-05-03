@@ -64,3 +64,15 @@ google-credentials.json
 firebase-debug.log
 *.log
 whatsapp-service/.wwebjs_auth/
+
+# local/build
+.next/
+node_modules/
+*.bak*
+.firebase/
+qr.txt
+wa-qr.html
+
+# whatsapp local session/cache
+whatsapp-service/.wwebjs_auth/
+whatsapp-service/.wwebjs_cache/
