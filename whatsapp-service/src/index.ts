@@ -208,8 +208,13 @@ app.post('/send', async (req, res) => {
 
     res.json({ ok: true });
   } catch (error: any) {
-    console.error('[BAILEYS SEND ERROR]', error);
-    res.status(500).json({ error: 'send failed', details: error?.message || String(error) });
+    console.error('[BAILEYS SEND ERROR FULL]', error);
+    res.status(500).json({
+      ok: false,
+      error: 'send failed',
+      details: error?.message || String(error),
+      stack: error?.stack || null,
+    });
   }
 });
 
