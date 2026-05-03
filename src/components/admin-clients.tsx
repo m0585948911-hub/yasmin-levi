@@ -2,6 +2,9 @@
 
 'use client';
 
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
 import React, { useState, useEffect, useMemo, useTransition, useRef } from 'react';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
@@ -540,22 +543,44 @@ export function AdminClients() {
   const businessId = useMemo(() => getBusinessIdClientSide(), []);
 
   const fetchClients = async () => {
-    setIsLoading(true);
     try {
       const fetchedClients = await getClients(businessId);
       setClients(fetchedClients);
     } catch (e) {
       console.error(e);
-      toast({ variant: 'destructive', title: 'שגיאה', description: 'לא ניתן היה לטעון את רשימת הלקוחות.' });
-      setClients([]);
+      toast({ variant: 'destructive', title: 'שגיאה', description: 'לא ניתן היה לרענן את רשימת הלקוחות.' });
     }
-    setIsLoading(false);
   };
 
   useEffect(() => {
-    fetchClients();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setIsLoading(true);
+
+    const q = query(
+      collection(db, 'clients'),
+      where('businessId', '==', businessId || 'default')
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const liveClients = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        })) as Client[];
+
+        setClients(liveClients);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error(error);
+        toast({ variant: 'destructive', title: 'שגיאה', description: 'לא ניתן היה לטעון את רשימת הלקוחות בזמן אמת.' });
+        setClients([]);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [businessId, toast]);
 
   const sortedAndFilteredClients = useMemo(() => {
     const filtered = clients.filter((client) => {

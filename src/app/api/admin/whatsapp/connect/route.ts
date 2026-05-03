@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const WHATSAPP_SERVICE_URL = 'https://whatsapp-service-90023766755.us-central1.run.app';
+const WHATSAPP_SERVICE_URL = 'http://35.193.216.250:8080';
 
 export async function POST(req: Request) {
  try {

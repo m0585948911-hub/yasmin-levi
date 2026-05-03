@@ -1,9 +1,12 @@
 import express from 'express';
-import QRCode from 'qrcode';
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import pino from 'pino';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { startQueueProcessor } from './queue';
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+} from '@whiskeysockets/baileys';
 
 const serviceAccount = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
   ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
@@ -13,201 +16,204 @@ initializeApp(serviceAccount ? { credential: cert(serviceAccount) } : undefined)
 const db = getFirestore();
 
 const app = express();
-const port = process.env.PORT || 8080;
-
 app.use(express.json());
 
-let latestQr: string | null = null;
-let latestQrDataUrl: string | null = null;
-let isReady = false;
-let lastStatus = 'starting';
+let sock: any = null;
+let ready = false;
+let status = 'logged_out';
+let lastPairingCode: string | null = null;
+let startingPromise: Promise<void> | null = null;
+let retryAfterUntil = 0;
 
-export const whatsappClient = new Client({
-  authStrategy: new LocalAuth({
-    clientId: process.env.WHATSAPP_SESSION_ID || 'yasmin-main',
-    dataPath: process.env.WHATSAPP_SESSION_PATH || './.wwebjs_auth',
-  }),
-  webVersionCache: {
-    type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-  },
-  puppeteer: {
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/nix/store/lpdrfl6n16q5zdf8acp4bni7yczzcx3h-idx-builtins/bin/chromium',
-    headless: false,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-extensions',
-      '--disable-background-networking',
-      '--disable-sync',
-      '--disable-default-apps',
-      '--no-first-run',
-      '--no-zygote',
-      '--window-size=1280,720'
-    ],
-  },
-});
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-whatsappClient.on('qr', async (qr) => {
-  latestQr = qr;
-  latestQrDataUrl = await QRCode.toDataURL(qr);
-  isReady = false;
-  lastStatus = 'qr';
-  console.log('[WHATSAPP WEB] QR generated');
-
-  await db.collection('whatsapp_status').doc('main').set({
-    status: 'qr',
-    ready: false,
-    qr,
-    qrDataUrl: latestQrDataUrl,
-    updatedAt: Timestamp.now(),
-  }, { merge: true });
-});
-
-whatsappClient.on('loading_screen', (percent, message) => {
-  console.log('[WHATSAPP WEB] loading_screen:', percent, message);
-});
-
-whatsappClient.on('auth_failure', (message) => {
-  console.error('[WHATSAPP WEB] auth_failure:', message);
-});
-
-whatsappClient.on('change_state', (state) => {
-  console.log('[WHATSAPP WEB] change_state:', state);
-});
-
-whatsappClient.on('authenticated', async () => {
-  lastStatus = 'authenticated';
-  console.log('[WHATSAPP WEB] authenticated');
-  await db.collection('whatsapp_status').doc('main').set({
-    status: 'authenticated',
-    updatedAt: Timestamp.now(),
-  }, { merge: true });
-});
-
-whatsappClient.on('ready', async () => {
-  latestQr = null;
-  latestQrDataUrl = null;
-  isReady = true;
-  lastStatus = 'ready';
-  console.log('[WHATSAPP WEB] ready');
-
-  await db.collection('whatsapp_status').doc('main').set({
-    status: 'ready',
-    ready: true,
-    qr: null,
-    qrDataUrl: null,
-    updatedAt: Timestamp.now(),
-  }, { merge: true });
-});
-
-whatsappClient.on('disconnected', async (reason) => {
-  isReady = false;
-  lastStatus = `disconnected: ${reason}`;
-  console.warn('[WHATSAPP WEB] disconnected:', reason);
-
-  await db.collection('whatsapp_status').doc('main').set({
-    status: 'disconnected',
-    ready: false,
-    reason,
-    updatedAt: Timestamp.now(),
-  }, { merge: true });
-});
-
-app.get('/_health', (req, res) => {
-  res.status(200).json({
-    ok: true,
-    ready: isReady,
-    status: lastStatus,
-  });
-});
-
-app.get('/status', (req, res) => {
-  res.json({
-    ok: true,
-    ready: isReady,
-    status: lastStatus,
-    hasQr: !!latestQr,
-  });
-});
-
-app.get('/qr', (req, res) => {
-  res.json({
-    ok: true,
-    ready: isReady,
-    status: lastStatus,
-    qr: latestQr,
-    qrDataUrl: latestQrDataUrl,
-  });
-});
-
-
-app.post('/connect', async (req,res) => {
- try{
-   const phone=(req.body?.phone||'').replace(/\D/g,'');
-   if(!phone){
-     return res.status(400).json({error:'missing phone'});
-   }
-
-   const code=await whatsappClient.requestPairingCode(phone);
-
-   await db.collection('whatsapp_status').doc('main').set({
-      status:'pairing',
-      pairingPhone: phone,
-      pairingCode: code,
-      codeExpiresAt: Timestamp.fromMillis(Date.now()+5*60*1000),
-      updatedAt: Timestamp.now()
-   },{merge:true});
-
-   return res.json({
-      ok:true,
-      status:'pairing',
-      code,
-      expiresIn:300
-   });
-
- } catch(e){
-   console.error(e);
-   return res.status(500).json({
-      error:'pairing failed'
-   });
- }
-});
-
-app.post('/logout', async (req, res) => {
-  await whatsappClient.logout();
-  isReady = false;
-  latestQr = null;
-  latestQrDataUrl = null;
-  lastStatus = 'logged_out';
-  res.json({ ok: true });
-});
-
-whatsappClient.initialize();
-
-const pairingPhone = process.env.WHATSAPP_PAIRING_PHONE;
-
-if (pairingPhone) {
-  whatsappClient.once('qr', async () => {
-    try {
-      const code = await whatsappClient.requestPairingCode(pairingPhone);
-      console.log('');
-      console.log('======================================');
-      console.log('WHATSAPP PAIRING CODE:', code);
-      console.log('Use WhatsApp > Linked devices > Link with phone number');
-      console.log('Phone:', pairingPhone);
-      console.log('======================================');
-      console.log('');
-    } catch (error) {
-      console.error('[WHATSAPP WEB] pairing code error:', error);
-    }
-  });
+function isConnectionClosed(error: any) {
+  return String(error?.message || error).includes('Connection Closed')
+    || error?.output?.statusCode === 428;
 }
 
-startQueueProcessor(db, whatsappClient);
+async function setStatus(next: string, extra: Record<string, any> = {}) {
+  status = next;
+  await db.collection('whatsapp_status').doc('main').set({
+    status,
+    ready,
+    pairingCode: lastPairingCode,
+    updatedAt: Timestamp.now(),
+    ...extra,
+  }, { merge: true });
+}
 
+async function startWhatsApp(phone?: string) {
+  if (Date.now() < retryAfterUntil) {
+    const err: any = new Error('socket_reconnecting');
+    err.retryAfter = Math.ceil((retryAfterUntil - Date.now()) / 1000);
+    throw err;
+  }
+
+  if (startingPromise) return startingPromise;
+
+  startingPromise = (async () => {
+    ready = false;
+    await setStatus('starting');
+
+    const { state, saveCreds } = await useMultiFileAuthState('./baileys_auth');
+    const { version } = await fetchLatestBaileysVersion();
+
+    sock = makeWASocket({
+      version,
+      auth: state,
+      logger: pino({ level: 'silent' }),
+      printQRInTerminal: false,
+      browser: ['Yasmin Levi App', 'Chrome', '1.0.0'],
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', async (update: any) => {
+      const { connection, lastDisconnect } = update;
+
+      if (connection === 'open') {
+        ready = true;
+        lastPairingCode = null;
+        await setStatus('connected', {
+          clientInfo: sock?.user || null,
+        });
+      }
+
+      if (connection === 'close') {
+        ready = false;
+        const reason = lastDisconnect?.error?.output?.statusCode;
+        status = reason === DisconnectReason.loggedOut ? 'logged_out' : 'disconnected';
+        await setStatus(status);
+        startingPromise = null;
+      }
+    });
+
+    if (phone && !state.creds.registered) {
+      await sleep(5000);
+
+      try {
+        const code = await sock.requestPairingCode(phone);
+        lastPairingCode = code;
+        await setStatus('pairing', {
+          pairingPhone: phone,
+          pairingCode: code,
+          codeExpiresAt: Timestamp.fromMillis(Date.now() + 5 * 60 * 1000),
+        });
+      } catch (error: any) {
+        if (isConnectionClosed(error)) {
+          sock = null;
+          ready = false;
+          lastPairingCode = null;
+          startingPromise = null;
+          retryAfterUntil = Date.now() + 30 * 1000;
+
+          await setStatus('reconnecting', {
+            pairingCode: null,
+            retryAfter: 30,
+            retryAfterUntil: Timestamp.fromMillis(retryAfterUntil),
+          });
+
+          const err: any = new Error('socket_reconnecting');
+          err.retryAfter = 30;
+          throw err;
+        }
+
+        throw error;
+      }
+    }
+  })();
+
+  return startingPromise;
+}
+
+app.get('/status', async (_req, res) => {
+  res.json({
+    ok: true,
+    ready,
+    status,
+    hasQr: false,
+    pairingCode: lastPairingCode,
+    clientInfo: sock?.user || null,
+  });
+});
+
+app.post('/connect', async (req, res) => {
+  try {
+    const phone = String(req.body?.phone || '').replace(/\D/g, '');
+
+    if (!phone || !phone.startsWith('972')) {
+      return res.status(400).json({ error: 'phone must be international Israeli format, e.g. 972509234865' });
+    }
+
+    await startWhatsApp(phone);
+
+    return res.json({
+      ok: true,
+      status,
+      code: lastPairingCode,
+      expiresIn: lastPairingCode ? 300 : undefined,
+    });
+  } catch (error: any) {
+    console.error('[BAILEYS CONNECT ERROR]', error);
+
+    if (error?.message === 'socket_reconnecting' || isConnectionClosed(error)) {
+      const retryAfter = error?.retryAfter || 30;
+      retryAfterUntil = Date.now() + retryAfter * 1000;
+
+      return res.status(409).json({
+        ok: false,
+        error: 'socket_reconnecting',
+        message: 'החיבור עדיין מתאפס. נסה שוב בעוד כמה שניות.',
+        retryAfter,
+      });
+    }
+
+    return res.status(500).json({
+      error: 'pairing failed',
+      details: error?.message || String(error),
+    });
+  }
+});
+
+app.post('/logout', async (_req, res) => {
+  try {
+    await sock?.logout?.();
+  } catch (error) {
+    console.error('[BAILEYS LOGOUT ERROR]', error);
+  }
+
+  sock = null;
+  ready = false;
+  lastPairingCode = null;
+  startingPromise = null;
+
+  await setStatus('logged_out', { pairingCode: null, clientInfo: null });
+
+  res.json({ ok: true, status: 'logged_out' });
+});
+
+app.post('/send', async (req, res) => {
+  try {
+    if (!sock || !ready) return res.status(400).json({ error: 'WhatsApp is not connected' });
+
+    const to = String(req.body?.to || '').replace(/\D/g, '');
+    const body = String(req.body?.body || '');
+
+    if (!to || !body) return res.status(400).json({ error: 'missing to/body' });
+
+    const jid = `${to.startsWith('972') ? to : `972${to.replace(/^0/, '')}`}@s.whatsapp.net`;
+
+    await sock.sendMessage(jid, { text: body });
+
+    res.json({ ok: true });
+  } catch (error: any) {
+    console.error('[BAILEYS SEND ERROR]', error);
+    res.status(500).json({ error: 'send failed', details: error?.message || String(error) });
+  }
+});
+
+const port = Number(process.env.PORT || 8080);
 app.listen(port, () => {
-  console.log(`WhatsApp Web service listening on port ${port}`);
+  console.log(`Baileys WhatsApp service listening on port ${port}`);
 });

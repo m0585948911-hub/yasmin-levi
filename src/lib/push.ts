@@ -127,8 +127,18 @@ export async function registerPushToken(entityId: string, entityType: "clients" 
     });
 
     if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to save push token: ${errorData.error || response.statusText}`);
+        let errorText = response.statusText;
+        try {
+            const errorData = await response.json();
+            errorText = errorData.error || errorText;
+        } catch {
+            try {
+                errorText = await response.text();
+            } catch {}
+        }
+
+        console.warn('[PUSH] Failed to save push token:', errorText);
+        return;
     }
 
     localStorage.setItem(`push_token_registered_${entityType}_${entityId}`, 'true');
