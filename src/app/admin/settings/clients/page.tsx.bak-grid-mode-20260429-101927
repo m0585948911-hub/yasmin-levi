@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState, useEffect, useTransition } from "react";
 import { getServices, Service } from "@/lib/services";
-import { getCategories, Category } from "@/lib/categories";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -143,13 +142,12 @@ const EditFormDialog = ({ form, onSave, onOpenChange, isOpen }: { form: Uploaded
     );
 };
 
-const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, categories, formType }: { onSave: (form: TreatmentFormTemplate) => void, onCancel: () => void, initialData?: TreatmentFormTemplate, services: Service[], categories: Category[], formType: 'treatment' | 'summary' }) => {
+const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, formType }: { onSave: (form: TreatmentFormTemplate) => void, onCancel: () => void, initialData?: TreatmentFormTemplate, services: Service[], formType: 'treatment' | 'summary' }) => {
     const defaultForm: TreatmentFormTemplate = {
         id: initialData?.id || crypto.randomUUID(),
         name: '',
         fields: [],
         serviceIds: [],
-        categoryIds: [],
         type: formType,
     };
     
@@ -158,10 +156,9 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, categor
     useEffect(() => {
         if (initialData) {
             const serviceIds = initialData.serviceIds || ((initialData as any).serviceId ? [(initialData as any).serviceId] : []);
-            const categoryIds = initialData.categoryIds || [];
-            setForm({ ...initialData, serviceIds, categoryIds, type: formType });
+            setForm({ ...initialData, serviceIds, type: formType });
         } else {
-            setForm({ id: crypto.randomUUID(), name: '', fields: [], serviceIds: [], categoryIds: [], type: formType});
+            setForm({ id: crypto.randomUUID(), name: '', fields: [], serviceIds: [], type: formType});
         }
     }, [initialData, formType]);
 
@@ -262,42 +259,42 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, categor
                     />
                 </div>
                  <div className="space-y-2">
-                    <Label>שיוך לקטגוריות (אופציונלי)</Label>
+                    <Label>שיוך לטיפולים (אופציונלי)</Label>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                         <Button variant="outline" className="w-full justify-between">
                             <span>
-                                {(form.categoryIds?.length || 0) > 0
-                                ? `${form.categoryIds?.length} קטגוריות נבחרו`
-                                : 'בחר קטגוריות לשיוך...'}
+                                {(form.serviceIds?.length || 0) > 0
+                                ? `${form.serviceIds?.length} שירותים נבחרו`
+                                : 'בחר טיפולים לשיוך...'}
                             </span>
                             <ChevronDown className="h-4 w-4 opacity-50" />
                         </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="w-[--radix-popover-trigger-width]">
-                        <DropdownMenuLabel>שייך קטגוריות</DropdownMenuLabel>
+                        <DropdownMenuLabel>שייך טיפולים</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        {categories.map(category => (
+                        {services.map(service => (
                             <DropdownMenuCheckboxItem
-                            key={category.id}
-                            checked={form.categoryIds?.includes(category.id)}
+                            key={service.id}
+                            checked={form.serviceIds?.includes(service.id)}
                             onSelect={(e) => e.preventDefault()}
                             onCheckedChange={(checked) => {
-                                const currentIds = form.categoryIds || [];
+                                const currentIds = form.serviceIds || [];
                                 if (checked) {
-                                    setForm(prev => ({...prev, categoryIds: [...currentIds, category.id]}));
+                                    setForm(prev => ({...prev, serviceIds: [...currentIds, service.id]}));
                                 } else {
-                                    setForm(prev => ({...prev, categoryIds: currentIds.filter(id => id !== category.id)}));
+                                    setForm(prev => ({...prev, serviceIds: currentIds.filter(id => id !== service.id)}));
                                 }
                             }}
                             >
-                            {category.name}
+                            {service.name}
                             </DropdownMenuCheckboxItem>
                         ))}
                         </DropdownMenuContent>
                     </DropdownMenu>
                     <p className="text-xs text-muted-foreground">
-                        שיוך טופס לקטגוריה יאפשר הצעה אוטומטית לכל טיפול שנמצא תחת אותה קטגוריה.
+                        שיוך טופס לטיפול יאפשר הצעתו האוטומטית לאחר ביצוע הטיפול.
                     </p>
                 </div>
                 <Separator />
@@ -389,7 +386,7 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, categor
                                      </div>
                                     {(field.type === 'select' || field.type === 'dynamicGrid') && (
                                          <div className="pl-4 space-y-2">
-                                             <Label className="text-xs">{field.type === 'dynamicGrid' ? 'עמודות הטבלה' : 'אפשרויות'}</Label>
+                                             <Label className="text-xs">אפשרויות</Label>
                                              {field.options.map((option, index) => (
                                                  <div key={index} className="flex items-center gap-2">
                                                      <Input 
@@ -407,25 +404,6 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, categor
                                                 הוסף אפשרות
                                             </Button>
                                          </div>
-                                    )}
-                                    {field.type === 'dynamicGrid' && (
-                                        <div className="pl-4 space-y-2 border rounded-md p-3 bg-accent/20">
-                                            <Label className="text-xs">מצב תצוגה</Label>
-                                            <Select
-                                                value={field.gridMode || 'matrix'}
-                                                onValueChange={() => updateField(field.id, { gridMode: 'matrix' })}
-                                            >
-                                                <SelectTrigger className="w-[220px]">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="matrix">מצב תצוגה: Matrix</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <p className="text-xs text-muted-foreground">
-                                                השורות יגיעו אוטומטית מהטיפולים שנבחרו בתור, והאפשרויות שהוגדרו יהפכו לעמודות.
-                                            </p>
-                                        </div>
                                     )}
                                     {field.type === 'image' && (
                                         <div className="pl-4 space-y-2">
@@ -477,7 +455,6 @@ export default function ClientSettingsPage() {
   const [editingSummaryTemplate, setEditingSummaryTemplate] = useState<TreatmentFormTemplate | null>(null);
   
   const [services, setServices] = useState<Service[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   
   const { toast } = useToast();
 
@@ -487,10 +464,8 @@ export default function ClientSettingsPage() {
         getFormTemplates(),
         getServices()
       ]);
-      const fetchedCategories = await getCategories();
       setAllTemplates(fetchedTemplates);
       setServices(fetchedServices);
-      setCategories(fetchedCategories);
       setIsLoading(false);
   };
 
@@ -637,11 +612,7 @@ export default function ClientSettingsPage() {
     fetchTemplatesAndServices();
   }
   const handleSaveTemplate = async (template: TreatmentFormTemplate) => {
-    await saveFormTemplate({
-      ...template,
-      serviceIds: template.serviceIds || [],
-      categoryIds: template.categoryIds || []
-    });
+    await saveFormTemplate(template);
     setIsBuildingForm(false);
     setEditingTemplate(null);
     toast({ title: "הצלחה!", description: "הטופס נשמר." });
@@ -663,11 +634,7 @@ export default function ClientSettingsPage() {
     fetchTemplatesAndServices();
   }
   const handleSaveSummaryTemplate = async (template: TreatmentFormTemplate) => {
-    await saveFormTemplate({
-      ...template,
-      serviceIds: template.serviceIds || [],
-      categoryIds: template.categoryIds || []
-    });
+    await saveFormTemplate(template);
     setIsBuildingSummaryForm(false);
     setEditingSummaryTemplate(null);
     toast({ title: "הצלחה!", description: "תבנית הסיכום נשמרה." });
@@ -718,7 +685,6 @@ export default function ClientSettingsPage() {
                             onCancel={() => setIsBuildingForm(false)} 
                             initialData={editingTemplate || undefined} 
                             services={services}
-                            categories={categories}
                         />
                     ) : (
                         <div className="space-y-4">
@@ -734,9 +700,9 @@ export default function ClientSettingsPage() {
                                     <li key={template.id} className="flex items-center justify-between p-3 border rounded-md bg-accent/50">
                                     <div>
                                         <span className="font-semibold">{template.name}</span>
-                                         {template.categoryIds && template.categoryIds.length > 0 && (
+                                         {template.serviceIds && template.serviceIds.length > 0 && (
                                             <p className="text-xs text-primary max-w-xs truncate">
-                                                {template.categoryIds.map(id => categories.find(c => c.id === id)?.name).filter(Boolean).join(', ')}
+                                                {template.serviceIds.map(id => services.find(s => s.id === id)?.name).filter(Boolean).join(', ')}
                                             </p>
                                         )}
                                     </div>
@@ -890,7 +856,6 @@ export default function ClientSettingsPage() {
                             onCancel={() => setIsBuildingSummaryForm(false)} 
                             initialData={editingSummaryTemplate || undefined}
                             services={services}
-                            categories={categories}
                         />
                     ) : (
                         <div className="space-y-4">
@@ -906,9 +871,9 @@ export default function ClientSettingsPage() {
                                     <li key={template.id} className="flex items-center justify-between p-3 border rounded-md bg-accent/50">
                                     <div>
                                         <span className="font-semibold">{template.name}</span>
-                                        {template.categoryIds && template.categoryIds.length > 0 && (
+                                        {template.serviceIds && template.serviceIds.length > 0 && (
                                             <p className="text-xs text-primary max-w-xs truncate">
-                                                {template.categoryIds.map(id => categories.find(c => c.id === id)?.name).filter(Boolean).join(', ')}
+                                                {template.serviceIds.map(id => services.find(s => s.id === id)?.name).filter(Boolean).join(', ')}
                                             </p>
                                         )}
                                     </div>

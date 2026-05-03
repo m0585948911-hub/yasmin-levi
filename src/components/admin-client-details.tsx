@@ -1,9 +1,8 @@
-
-
 'use client';
 
 import React from 'react';
 
+import { getSettingsForClient } from '@/lib/settings';
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -69,6 +68,7 @@ import { getFormTemplates, deleteFormInstance, type TreatmentFormTemplate, type 
 import { BirthDateSelector } from './birth-date-selector';
 import { SignaturePad } from './signature-pad';
 import { User, getUsers } from '@/lib/users';
+import { getServices, type Service } from '@/lib/services';
 import { createReminder } from '@/lib/reminders';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -152,6 +152,8 @@ function FamilyManagementDialog({
     const [relations, setRelations] = useState<FamilyRelation[]>(client.familyRelations || []);
     const [isMutating, startMutation] = useTransition();
     const { toast } = useToast();
+
+
 
     // To add a new relation
     const [search, setSearch] = useState('');
@@ -297,13 +299,99 @@ function FamilyManagementDialog({
     )
 }
 
+function TreatmentTrackingCard({
+instances
+}:{instances:FilledFormInstance[]}){
+
+const rows=instances
+.slice()
+.sort((a,b)=>
+new Date(a.filledAt||a.assignedAt).getTime()-
+new Date(b.filledAt||b.assignedAt).getTime()
+)
+.slice(0,10);
+
+return (
+<Card className="mb-8">
+<CardContent className="p-6">
+
+<h3 className="text-xl font-bold text-center mb-6">
+כרטיס מעקב 10 טיפולים
+</h3>
+
+<Table>
+<TableHeader>
+<TableRow>
+<TableHead>מס׳</TableHead>
+<TableHead>תאריך</TableHead>
+<TableHead>אזור</TableHead>
+<TableHead>אנרגיה</TableHead>
+<TableHead>עוצמה</TableHead>
+<TableHead>תדירות</TableHead>
+<TableHead>תשלום</TableHead>
+</TableRow>
+</TableHeader>
+
+<TableBody>
+
+{Array.from({length:10}).map((_,i)=>{
+const row=rows[i];
+const d=row?.data||{};
+
+return(
+<TableRow key={i}>
+<TableCell>{i+1}</TableCell>
+<TableCell>
+{row?.filledAt
+? format(new Date(row.filledAt),'dd/MM/yy')
+: '-'}
+</TableCell>
+
+<TableCell>
+{d['treatment_grid_rowLabel_0']
+|| d['rowLabel_0']
+|| '-'}
+</TableCell>
+
+<TableCell>
+{d['treatment_grid_r0_c0']||'-'}
+</TableCell>
+
+<TableCell>
+{d['treatment_grid_r0_c1']||'-'}
+</TableCell>
+
+<TableCell>
+{d['treatment_grid_r0_c2']||'-'}
+</TableCell>
+
+<TableCell>
+{d['payment']||'-'}
+</TableCell>
+
+</TableRow>
+)
+})}
+
+</TableBody>
+</Table>
+
+</CardContent>
+</Card>
+);
+}
+
 function TreatmentSummaryTable({
     instances,
     templates,
+    appointments = [],
 }: {
     instances: FilledFormInstance[];
     templates: TreatmentFormTemplate[];
+    appointments?: Appointment[];
 }) {
+    const [selectedAreaName, setSelectedAreaName] = useState<string | null>(null);
+
     const summaryFields = useMemo(() => {
         const fieldsMap = new Map<string, FormField>();
         templates.forEach(template => {
@@ -327,12 +415,128 @@ function TreatmentSummaryTable({
         [instances, templates]
     );
 
+    const getAreaNameFromInstance = (instance: FilledFormInstance, template: TreatmentFormTemplate) => {
+        const directValue =
+            instance.data?.treatmentArea ||
+            instance.data?.treatmentAreas ||
+            instance.data?.area ||
+            instance.data?.areas;
+
+        if (directValue) {
+            return Array.isArray(directValue) ? directValue.join(', ') : String(directValue);
+        }
+
+        const areaField = template.fields?.find((field: any) =>
+            ['אזור טיפול', 'איזור טיפול', 'אזורי טיפול', 'איזורי טיפול'].includes(String(field.label || '').trim())
+        );
+
+        if (areaField && instance.data?.[areaField.id]) {
+            const value = instance.data[areaField.id];
+            return Array.isArray(value) ? value.join(', ') : String(value);
+        }
+
+        return '';
+    };
+
+    const treatmentAreaStats = useMemo(() => {
+        const appointmentById = new Map(appointments.map(app => [app.id, app]));
+        const stats = new Map<string, { count: number; lastDate?: string }>();
+
+        instancesWithTemplate.forEach(({ instance, template }) => {
+            const appointment = instance.appointmentId ? appointmentById.get(instance.appointmentId) : undefined;
+            const rawName = appointment?.serviceName || getAreaNameFromInstance(instance, template) || instance.templateName || template.name || 'טיפול לא מזוהה';
+
+            const areaNames = rawName
+                .split(',')
+                .map(name => name.trim())
+                .filter(Boolean);
+
+            const uniqueAreaNames = Array.from(new Set(areaNames.length ? areaNames : [rawName]));
+
+            uniqueAreaNames.forEach(areaName => {
+                const current = stats.get(areaName) || { count: 0 };
+                const candidateDate = instance.filledAt || appointment?.start || instance.assignedAt;
+
+                stats.set(areaName, {
+                    count: current.count + 1,
+                    lastDate: !current.lastDate || new Date(candidateDate) > new Date(current.lastDate)
+                        ? candidateDate
+                        : current.lastDate,
+                });
+            });
+        });
+
+        return Array.from(stats.entries())
+            .map(([areaName, data]) => ({ areaName, ...data }))
+            .sort((a, b) => b.count - a.count || a.areaName.localeCompare(b.areaName, 'he'));
+    }, [instancesWithTemplate, appointments]);
+
+    const filteredInstancesWithTemplate = useMemo(() => {
+        if (!selectedAreaName) return instancesWithTemplate;
+
+        const appointmentById = new Map(appointments.map(app => [app.id, app]));
+
+        return instancesWithTemplate.filter(({ instance, template }) => {
+            const appointment = instance.appointmentId ? appointmentById.get(instance.appointmentId) : undefined;
+            const rawName = appointment?.serviceName || getAreaNameFromInstance(instance, template) || instance.templateName || template.name || 'טיפול לא מזוהה';
+
+            return rawName
+                .split(',')
+                .map(name => name.trim())
+                .filter(Boolean)
+                .includes(selectedAreaName);
+        });
+    }, [selectedAreaName, instancesWithTemplate, appointments]);
+
     if (instancesWithTemplate.length === 0) {
         return <p className="text-sm text-center text-muted-foreground py-4">אין סיכומי טיפולים להצגה.</p>;
     }
 
 
     return (
+        <>
+        {treatmentAreaStats.length > 0 && (
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {treatmentAreaStats.map(item => (
+                    <Card
+                        key={item.areaName}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedAreaName(prev => prev === item.areaName ? null : item.areaName)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedAreaName(prev => prev === item.areaName ? null : item.areaName);
+                            }
+                        }}
+                        className={`bg-muted/30 cursor-pointer transition hover:bg-muted/60 ${selectedAreaName === item.areaName ? 'ring-2 ring-primary' : ''}`}
+                    >
+                        <CardContent className="p-4">
+                            <p className="text-sm text-muted-foreground">אזור טיפול</p>
+                            <p className="font-semibold">{item.areaName}</p>
+                            <p className="text-2xl font-bold mt-2">{item.count}</p>
+                            <p className="text-xs text-muted-foreground">
+                                {item.count === 1 ? 'טיפול אחד' : 'טיפולים'}
+                                {item.lastDate ? ` · אחרון: ${format(new Date(item.lastDate), 'dd/MM/yy')}` : ''}
+                            </p>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        )}
+
+        {selectedAreaName && (
+            <div className="mb-3 flex items-center justify-between rounded-md border bg-accent/30 p-3">
+                <p className="text-sm">
+                    מציג טיפולים באזור: <span className="font-bold">{selectedAreaName}</span>
+                    <span className="text-muted-foreground"> · {filteredInstancesWithTemplate.length} תוצאות</span>
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedAreaName(null)}>
+                    נקה סינון
+                </Button>
+            </div>
+        )}
+
         <Table>
             <TableHeader>
                 <TableRow>
@@ -343,7 +547,7 @@ function TreatmentSummaryTable({
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {instancesWithTemplate.map(({ instance, template }) => (
+                {filteredInstancesWithTemplate.map(({ instance, template }) => (
                     <TableRow key={instance.instanceId}>
                         <TableCell className="font-medium">
                             {instance.filledAt ? format(new Date(instance.filledAt), 'dd/MM/yy') : '-'}
@@ -371,6 +575,7 @@ function TreatmentSummaryTable({
                 ))}
             </TableBody>
         </Table>
+        </>
     );
 };
 
@@ -383,6 +588,13 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
     settings: AllSettings | null,
     logoUrl: string | null,
 }>(({ instance, template, client, adminUserName, settings, logoUrl }, ref) => {
+    const business = settings?.businessDetails;
+    const businessAddress = [
+        business?.street,
+        business?.houseNumber,
+        business?.city,
+    ].filter(Boolean).join(', ');
+    const businessWebsite = settings?.appLinks?.website || '';
     
     // Grouping logic
     const sortedFields = template.fields.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
@@ -411,9 +623,11 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
         <div ref={ref} className="p-8 bg-white text-black font-sans" style={{ width: '210mm' }}>
             <header className="flex justify-between items-center pb-4 border-b-2 border-gray-200">
                 <div className="text-right">
-                    <h1 className="text-3xl font-bold text-gray-800">{settings?.businessDetails?.businessName || 'קליניקה'}</h1>
-                    <p className="text-sm text-gray-500">{settings?.businessDetails?.street} {settings?.businessDetails?.houseNumber}, {settings?.businessDetails?.city}</p>
-                    <p className="text-sm text-gray-500">טלפון: {settings?.businessDetails?.phone} | אימייל: {settings?.businessDetails?.email}</p>
+                    <h1 className="text-3xl font-bold text-gray-800">{business?.businessName || ''}</h1>
+                    {businessAddress && <p className="text-sm text-gray-500">{businessAddress}</p>}
+                    {business?.phone && <p className="text-sm text-gray-500">טלפון: {business.phone}</p>}
+                    {business?.email && <p className="text-sm text-gray-500">אימייל: {business.email}</p>}
+                    {businessWebsite && <p className="text-sm text-gray-500">אתר: {businessWebsite}</p>}
                 </div>
                 {logoUrl && (
                     <div className="w-24 h-24 relative">
@@ -423,7 +637,12 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
             </header>
 
             <main className="mt-8">
-                <h2 className="text-2xl font-semibold text-center mb-6">סיכום טיפול - {template.name}</h2>
+                <div className="text-center mb-6">
+<h2 className="text-3xl font-bold">{template.name}</h2>
+<p className="mt-2 text-sm">
+סוג טיפול: {template.name || ""} • טיפול מספר {(instance.data?.treatmentNumber || 1)}
+</p>
+</div>
                 
                 <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm mb-6 p-4 bg-gray-50 rounded-lg">
                     <div><span className="font-semibold">שם הלקוח/ה:</span> {client.firstName} {client.lastName}</div>
@@ -446,7 +665,10 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
                       }
 
                       let displayValue: React.ReactNode = '-';
-                      if (field.type === 'signature') {
+                      if (field.type === 'dynamicGrid') {
+ displayValue=renderDynamicGridForPrint(field,instance);
+}
+else if (field.type === 'signature') {
                           displayValue = value ? <div className="border p-1 mt-1 bg-white inline-block"><img src={value as string} alt="חתימה" style={{ width: '200px', height: '100px', objectFit: 'contain' }} /></div> : '-';
                       } else if (field.type === 'image') {
                          displayValue = (<div className="flex flex-wrap gap-2 mt-1">{(value as string[] || []).map((mediaSrc, idx) => (<div key={idx} className="w-32 h-32 relative border rounded">{mediaSrc.startsWith('data:image') ? (<Image unoptimized src={mediaSrc} alt={`${field.label} ${idx + 1}`} layout="fill" style={{width: '100%', height: '100%', objectFit: 'cover'}} />) : (<div className="w-full h-full bg-black text-white flex items-center justify-center">וידאו</div>)}</div>))}</div>);
@@ -499,6 +721,40 @@ const PrintableSummary = React.forwardRef<HTMLDivElement, {
 });
 PrintableSummary.displayName = 'PrintableSummary';
 
+const renderDynamicGridForPrint = (field:any, instance:any) => {
+ return (
+   <table className="w-full border-collapse border mt-3 text-sm">
+     <thead>
+       <tr>
+         <th className="border p-2">אזור טיפול</th>
+         {(field.options||[]).filter(Boolean).map((c:string,i:number)=>(
+           <th key={i} className="border p-2">{c}</th>
+         ))}
+       </tr>
+     </thead>
+     <tbody>
+       {Array.from({length:20}).map((_,r)=>{
+         const first=instance.data[`${field.id}_r${r}_c0`];
+         if(!first) return null;
+         return (
+          <tr key={r}>
+            <td className="border p-2 font-semibold">
+              {instance.data[`${field.id}_rowLabel_${r}`] || ('אזור '+(r+1))}
+            </td>
+            {(field.options||[]).filter(Boolean).map((_:any,c:number)=>(
+             <td key={c} className="border p-2">
+              {instance.data[`${field.id}_r${r}_c${c}`] || '-'}
+             </td>
+            ))}
+          </tr>
+         )
+       })}
+     </tbody>
+   </table>
+ )
+};
+
+
 const PrintableSignedForm = React.forwardRef<HTMLDivElement, {
     instance: FilledFormInstance,
     template: TreatmentFormTemplate,
@@ -541,9 +797,13 @@ const PrintableSignedForm = React.forwardRef<HTMLDivElement, {
         <div ref={ref} className="p-8 bg-white text-black font-sans" style={{ width: '210mm' }}>
             <header className="flex justify-between items-center pb-4 border-b-2 border-gray-200">
                 <div className="text-right">
-                    <h1 className="text-3xl font-bold text-gray-800">{settings?.businessDetails?.businessName || 'קליניקה'}</h1>
-                    <p className="text-sm text-gray-500">{settings?.businessDetails?.street} {settings?.businessDetails?.houseNumber}, {settings?.businessDetails?.city}</p>
-                    <p className="text-sm text-gray-500">טלפון: {settings?.businessDetails?.phone} | אימייל: {settings?.businessDetails?.email}</p>
+                    <h1 className="text-3xl font-bold text-gray-800">{settings?.businessDetails?.businessName || ''}</h1>
+                    <p className="text-sm text-gray-500">
+                      {[settings?.businessDetails?.street, settings?.businessDetails?.houseNumber, settings?.businessDetails?.city].filter(Boolean).join(', ')}
+                    </p>
+                    <p className="text-sm text-gray-500">טלפון: {settings?.businessDetails?.phone || ''}</p>
+                    <p className="text-sm text-gray-500">אימייל: {settings?.businessDetails?.email || ''}</p>
+                    <p className="text-sm text-gray-500">אתר: {settings?.appLinks?.website || ''}</p>
                 </div>
                 {logoUrl && (
                     <div className="w-24 h-24 relative">
@@ -562,7 +822,10 @@ const PrintableSignedForm = React.forwardRef<HTMLDivElement, {
                           const value = instance.data[field.id];
                           let displayValue: React.ReactNode = '-';
 
-                          if (field.type === 'personalDetails') {
+                          if (field.type === 'dynamicGrid') {
+ displayValue=renderDynamicGridForPrint(field,instance);
+}
+if (field.type === 'personalDetails') {
                               return <div key={field.id}>{PersonalDetailsSection}</div>;
                           }
                           if (field.type === 'title') {
@@ -639,8 +902,11 @@ const ViewTreatmentInstanceDialog = ({ isOpen, onOpenChange, instance, template,
   
   useEffect(() => {
     if (isOpen) {
-        const s = getFromLocalStorage<AllSettings | null>('appGeneralSettings', null);
-        setSettings(s);
+        (async()=>{
+const liveSettings = await getSettingsForClient();
+console.log("PRINT SETTINGS", liveSettings);
+setSettings(liveSettings);
+})();
         const l = localStorage.getItem('businessLogoUrl');
         setLogoUrl(l);
     }
@@ -747,7 +1013,7 @@ const ViewTreatmentInstanceDialog = ({ isOpen, onOpenChange, instance, template,
         </div>
         <DialogFooter className="justify-between">
           <Button variant="outline" onClick={() => onOpenChange(false)}>סגירה</Button>
-          <Button onClick={handlePrint} disabled={isPrinting}>
+          <Button onClick={handlePrint} disabled={isPrinting || !settings}>
               {isPrinting ? <Loader2 className="animate-spin" /> : <Printer className="mr-2" />}
               הדפסה
           </Button>
@@ -944,7 +1210,7 @@ function CameraCaptureDialog({ isOpen, onOpenChange, onCapture }: { isOpen: bool
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="max-w-5xl">
                 <DialogHeader>
                     <DialogTitle>צלם תמונה</DialogTitle>
                 </DialogHeader>
@@ -970,6 +1236,8 @@ const FillTreatmentForm = ({
   adminUserName,
   isSaving,
   initialInstance,
+  clientFormHistory,
+  services,
 }: {
   template: TreatmentFormTemplate,
   onSave: (instance: FilledFormInstance, clientUpdate?: Partial<Client>) => void,
@@ -979,8 +1247,11 @@ const FillTreatmentForm = ({
   adminUserName: string,
   isSaving: boolean,
   initialInstance: FilledFormInstance,
+  clientFormHistory: FilledFormInstance[],
+  services: Service[],
 }) => {
   const [formData, setFormData] = useState<{ [fieldId: string]: string | boolean | string[] }>({});
+  const [extraServices, setExtraServices] = useState<string[]>([]);
   
   const [editableClientDetails, setEditableClientDetails] = useState({
       firstName: client.firstName,
@@ -991,6 +1262,23 @@ const FillTreatmentForm = ({
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [capturingForFieldId, setCapturingForFieldId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const getTreatmentNumberForArea = (areaName: string) => {
+    const cleanArea = areaName.trim();
+    if (!cleanArea) return 1;
+
+    let count = 0;
+
+    clientFormHistory.forEach((instance) => {
+      const data = instance.data || {};
+      const values = Object.values(data).map(v => String(v).trim());
+      if (values.includes(cleanArea)) {
+        count += 1;
+      }
+    });
+
+    return count + 1;
+  };
 
   useEffect(() => {
     setFormData(initialInstance?.data || {});
@@ -1197,7 +1485,7 @@ const FillTreatmentForm = ({
             if (field.type === 'contentWithConsent') {
                 const isRequired = field.required;
                 return (
-                    <div key={field.id} className="space-y-2">
+                    <div key={field.id} className="space-y-2 rounded-2xl border shadow-sm bg-white p-5">
                         <Card>
                             <CardContent className="p-4">
                                 <ScrollArea className="h-24 w-full rounded-md border p-2">
@@ -1270,6 +1558,199 @@ const FillTreatmentForm = ({
                   </Select>
                 )}
                 
+
+                {field.type === 'appointmentTreatmentsTable' && (
+                  <>
+                  <div className="mb-4 flex gap-2">
+                    <input
+                      placeholder="הוסף טיפול ידנית"
+                      className="border px-2 py-1 rounded"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const val = e.currentTarget.value.trim();
+                          if (val) {
+                            setExtraServices(prev => [...prev, val]);
+                            e.currentTarget.value = '';
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl border shadow-sm bg-white p-6 overflow-x-auto">
+
+                    {(
+  [
+    ...(
+      (appointment?.serviceId || '')
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean)
+        .map(id => {
+          const service = services.find((s: Service) => s.id === id);
+          return service?.name || id;
+        })
+    ),
+    ...extraServices
+  ].join(',')
+)
+                      .split(',')
+                      .map(v=>v.trim())
+                      .filter(Boolean)
+                      .map((serviceName,index)=>(
+                        <div
+                          key={index}
+                          className="rounded-xl border bg-slate-50 p-5 min-w-[760px]"
+                        >
+
+                          <div className="font-semibold text-base">
+                            {serviceName}
+                          </div>
+
+                          <div className="grid md:grid-cols-3 gap-4">
+
+                            <Input
+                              placeholder="מספר טיפול"
+                              value={(formData[`${field.id}_${index}_number`] as string)||''}
+                              onChange={e=>handleFieldChange(
+                                `${field.id}_${index}_number`,
+                                e.target.value
+                              )}
+                            />
+
+                            <Input
+                              placeholder="עוצמה"
+                              value={(formData[`${field.id}_${index}_power`] as string)||''}
+                              onChange={e=>handleFieldChange(
+                                `${field.id}_${index}_power`,
+                                e.target.value
+                              )}
+                            />
+
+                            <Input
+                              placeholder="תדירות"
+                              value={(formData[`${field.id}_${index}_freq`] as string)||''}
+                              onChange={e=>handleFieldChange(
+                                `${field.id}_${index}_freq`,
+                                e.target.value
+                              )}
+                            />
+
+                          </div>
+
+                          <Textarea
+                            placeholder="הערות לאזור זה"
+                            value={(formData[`${field.id}_${index}_notes`] as string)||''}
+                            onChange={e=>handleFieldChange(
+                              `${field.id}_${index}_notes`,
+                              e.target.value
+                            )}
+                          />
+
+                        </div>
+                      ))
+                    }
+
+                  </div>
+                  </>
+                )}
+
+
+                {field.type === 'dynamicGrid' && (
+                  <div className="overflow-x-auto rounded-xl border bg-background">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-center font-bold">מס׳ טיפול</TableHead>
+<TableHead className="text-center font-bold">אזור טיפול</TableHead>
+                          {(field.options || []).filter(Boolean).map((column, columnIndex) => (
+                            <TableHead key={columnIndex} className="text-center font-bold">
+                              {column}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(
+  [
+    ...(
+      (appointment?.serviceId || '')
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean)
+        .map(id => {
+          const service = services.find((s: Service) => s.id === id);
+          return service?.name || id;
+        })
+    ),
+    ...extraServices
+  ].join(',')
+)
+                          .split(',')
+                          .map(v => v.trim())
+                          .filter(Boolean)
+                          .map((serviceName, rowIndex) => (
+                            <TableRow key={rowIndex}>
+                              <TableCell className="text-center font-semibold">
+{((formData.treatmentNumber as any) || 1)}
+</TableCell>
+<TableCell className="text-center font-semibold">
+                                {serviceName}
+                                {(() => {
+                                  if (!formData[`${field.id}_rowLabel_${rowIndex}`]) {
+                                    handleFieldChange(
+                                      `${field.id}_rowLabel_${rowIndex}`,
+                                      serviceName
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </TableCell>
+
+                              {(field.options || []).filter(Boolean).map((column, columnIndex) => {
+                                const cellKey = `${field.id}_r${rowIndex}_c${columnIndex}`;
+                                return (
+                                  <TableCell key={cellKey}>
+                                    <Input
+                                      placeholder={column}
+                                      value={
+(field.options?.[columnIndex]?.includes('מס')
+ || field.options?.[columnIndex]?.includes('טיפול'))
+? String(getTreatmentNumberForArea(serviceName))
+: ((formData[cellKey] as string)||'')
+}
+                                      onChange={e => handleFieldChange(cellKey, e.target.value)}
+                                    />
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+
+                    {!(
+  [
+    ...(
+      (appointment?.serviceId || '')
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean)
+        .map(id => {
+          const service = services.find((s: Service) => s.id === id);
+          return service?.name || id;
+        })
+    ),
+    ...extraServices
+  ].join(',')
+).trim() && (
+                      <p className="text-sm text-muted-foreground text-center p-4">
+                        לא נמצאו טיפולים בתור הזה.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {field.type === 'signature' && (
                     <div className="space-y-2">
                         <SignaturePad
@@ -1728,6 +2209,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
   const [noteForAppointment, setNoteForAppointment] = useState<Appointment | null>(null);
   const [editingNote, setEditingNote] = useState<FilledFormInstance | null>(null);
   const [summaryTemplates, setSummaryTemplates] = useState<TreatmentFormTemplate[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [allTemplates, setAllTemplates] = useState<TreatmentFormTemplate[]>([]);
   const [clientFormHistory, setClientFormHistory] = useState<FilledFormInstance[]>([]);
   const [viewingInstance, setViewingInstance] = useState<FilledFormInstance | null>(null);
@@ -1957,7 +2439,14 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
 
   const getSummaryTemplateForService = (serviceId: string): TreatmentFormTemplate | undefined => {
     if (!serviceId) return undefined;
-    return summaryTemplates.find(t => t.serviceIds?.includes(serviceId));
+
+    const service = services.find(s => s.id === serviceId);
+    const categoryId = service?.categoryId;
+
+    return summaryTemplates.find(t =>
+      t.serviceIds?.includes(serviceId) ||
+      (!!categoryId && t.categoryIds?.includes(categoryId))
+    );
   };
   
 
@@ -2025,6 +2514,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
              saveData.signatureDetails.signedAt = Timestamp.fromDate(new Date(saveData.signatureDetails.signedAt));
         }
 
+        console.log("SAVING FORM INSTANCE DATA", saveData);
         await setDoc(docRef, saveData, { merge: true });
 
         setIsFillingNote(false);
@@ -2193,6 +2683,8 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
           adminUserName={user ? `${user.firstName} ${user.lastName}` : 'מנהל/ת'}
           isSaving={isSavingNote}
           initialInstance={editingNote!}
+          clientFormHistory={clientFormHistory}
+          services={services}
         />
       </div>
     );
@@ -2368,9 +2860,14 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <TreatmentSummaryTable
+                    <TreatmentTrackingCard
+instances={clientFormHistory}
+/>
+
+<TreatmentSummaryTable
                         instances={clientFormHistory}
                         templates={allTemplates}
+                        appointments={allPastAppointments}
                     />
                 </CardContent>
             </Card>
@@ -2413,7 +2910,7 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
             </div>
         </TabsContent>
         <TabsContent value="forms" className="mt-4">
-              <div className="space-y-6">
+              <div className="mx-auto max-w-4xl space-y-8 px-6 pb-10">
                   <Card>
                       <CardHeader>
                           <div className="flex justify-between items-center">
@@ -2584,10 +3081,16 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
                                             </Button>
                                           ) : (
                                             canManage ? (
-                                              <Button variant="default" size="sm" onClick={() => handleViewNote(noteInstance.instanceId)}>
-                                                <Eye className="mr-2" />
-                                                צפה בסיכום
-                                              </Button>
+                                              <div className="flex gap-2">
+                                                <Button variant="default" size="sm" onClick={() => handleViewNote(noteInstance.instanceId)}>
+                                                  <Eye className="mr-2" />
+                                                  צפה בסיכום
+                                                </Button>
+                                                <Button variant="outline" size="sm" onClick={() => handleStartFillingNote(app, noteInstance)}>
+                                                  <Pencil className="mr-2" />
+                                                  ערוך סיכום
+                                                </Button>
+                                              </div>
                                             ) : (
                                               <Button variant="default" size="sm" disabled>
                                                 <Eye className="mr-2" />
@@ -2866,3 +3369,4 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     </div>
   );
 }
+// BUILD VERSION: 2026-05-03_06:14:46
