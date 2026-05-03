@@ -2308,11 +2308,12 @@ export function AdminClientDetails({ initialClient }: { initialClient: Client })
     }));
 
     // One-time fetches
-    Promise.all([getFormTemplates(), getClients(initialClient.businessId), getUsers()]).then(([templates, clients, users]) => {
+    Promise.all([getFormTemplates(), getClients(initialClient.businessId), getUsers(), getServices()]).then(([templates, clients, users, services]) => {
       setAllTemplates(templates);
       setSummaryTemplates(templates.filter(t => t.type === 'summary'));
       setAllClients(clients);
       setAdminUsers(users);
+      setServices(services);
       setIsLoading(false);
     }).catch(error => {
         console.error("Error fetching one-time data:", error);
