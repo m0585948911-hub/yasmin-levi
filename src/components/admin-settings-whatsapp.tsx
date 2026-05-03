@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
@@ -31,7 +32,7 @@ type WhatsAppStatus = {
   ok?: boolean;
   ready?: boolean;
   status?: string;
-  hasQr?: boolean;
+  qr?: string;
 };
 
 export function AdminSettingsWhatsapp() {
@@ -210,7 +211,20 @@ export function AdminSettingsWhatsapp() {
                   <CheckCircle className="h-6 w-6 text-green-500" />
                 ) : (
                   <WifiOff className="h-6 w-6 text-red-500" />
-                )}
+                }
+{status.status === 'qr' && status.qr && (
+  <div className="rounded-2xl border-2 border-blue-500 bg-blue-50 p-5 text-center space-y-3">
+    <div className="text-sm font-medium text-blue-800">
+      סרוק את הקוד עם WhatsApp
+    </div>
+    <div className="flex justify-center">
+      <QRCodeSVG value={status.qr} size={220} />
+    </div>
+    <div className="text-xs text-blue-900">
+      WhatsApp ← מכשירים מקושרים ← סרוק קוד QR
+    </div>
+  </div>
+)}
                 <span>חיבור WhatsApp Web</span>
               </div>
               <Badge className={isReady ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}>
@@ -235,7 +249,20 @@ export function AdminSettingsWhatsapp() {
               <Input
                 id="wa-phone"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(e.target.value}
+{status.status === 'qr' && status.qr && (
+  <div className="rounded-2xl border-2 border-blue-500 bg-blue-50 p-5 text-center space-y-3">
+    <div className="text-sm font-medium text-blue-800">
+      סרוק את הקוד עם WhatsApp
+    </div>
+    <div className="flex justify-center">
+      <QRCodeSVG value={status.qr} size={220} />
+    </div>
+    <div className="text-xs text-blue-900">
+      WhatsApp ← מכשירים מקושרים ← סרוק קוד QR
+    </div>
+  </div>
+)}
                 placeholder="0509234865"
                 dir="ltr"
               />
@@ -257,7 +284,20 @@ export function AdminSettingsWhatsapp() {
                   WhatsApp ← מכשירים מקושרים ← קישור באמצעות מספר טלפון
                 </div>
               </div>
-            )}
+            }
+{status.status === 'qr' && status.qr && (
+  <div className="rounded-2xl border-2 border-blue-500 bg-blue-50 p-5 text-center space-y-3">
+    <div className="text-sm font-medium text-blue-800">
+      סרוק את הקוד עם WhatsApp
+    </div>
+    <div className="flex justify-center">
+      <QRCodeSVG value={status.qr} size={220} />
+    </div>
+    <div className="text-xs text-blue-900">
+      WhatsApp ← מכשירים מקושרים ← סרוק קוד QR
+    </div>
+  </div>
+)}
           </CardContent>
 
           <CardFooter className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -290,7 +330,20 @@ export function AdminSettingsWhatsapp() {
                 id="test-number"
                 placeholder="לדוגמה: 972501234567"
                 value={testNumber}
-                onChange={(e) => setTestNumber(e.target.value)}
+                onChange={(e) => setTestNumber(e.target.value}
+{status.status === 'qr' && status.qr && (
+  <div className="rounded-2xl border-2 border-blue-500 bg-blue-50 p-5 text-center space-y-3">
+    <div className="text-sm font-medium text-blue-800">
+      סרוק את הקוד עם WhatsApp
+    </div>
+    <div className="flex justify-center">
+      <QRCodeSVG value={status.qr} size={220} />
+    </div>
+    <div className="text-xs text-blue-900">
+      WhatsApp ← מכשירים מקושרים ← סרוק קוד QR
+    </div>
+  </div>
+)}
                 dir="ltr"
               />
             </div>
@@ -353,7 +406,20 @@ export function AdminSettingsWhatsapp() {
                       אין יומני הודעות להצגה.
                     </TableCell>
                   </TableRow>
-                )}
+                }
+{status.status === 'qr' && status.qr && (
+  <div className="rounded-2xl border-2 border-blue-500 bg-blue-50 p-5 text-center space-y-3">
+    <div className="text-sm font-medium text-blue-800">
+      סרוק את הקוד עם WhatsApp
+    </div>
+    <div className="flex justify-center">
+      <QRCodeSVG value={status.qr} size={220} />
+    </div>
+    <div className="text-xs text-blue-900">
+      WhatsApp ← מכשירים מקושרים ← סרוק קוד QR
+    </div>
+  </div>
+)}
               </TableBody>
             </Table>
           </ScrollArea>
