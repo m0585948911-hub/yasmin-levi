@@ -63,3 +63,4 @@ out/
 google-credentials.json
 firebase-debug.log
 *.log
+whatsapp-service/.wwebjs_auth/
