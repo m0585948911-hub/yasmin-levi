@@ -211,7 +211,7 @@ export function AdminSettingsWhatsapp() {
                   <CheckCircle className="h-6 w-6 text-green-500" />
                 ) : (
                   <WifiOff className="h-6 w-6 text-red-500" />
-                }
+                )}
 {status.status === 'qr' && status.qr && (
   <div className="rounded-2xl border-2 border-blue-500 bg-blue-50 p-5 text-center space-y-3">
     <div className="text-sm font-medium text-blue-800">
@@ -406,7 +406,7 @@ export function AdminSettingsWhatsapp() {
                       אין יומני הודעות להצגה.
                     </TableCell>
                   </TableRow>
-                }
+                )}
 {status.status === 'qr' && status.qr && (
   <div className="rounded-2xl border-2 border-blue-500 bg-blue-50 p-5 text-center space-y-3">
     <div className="text-sm font-medium text-blue-800">
