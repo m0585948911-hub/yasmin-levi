@@ -4,7 +4,7 @@
 import { collection, addDoc, getDocs, query, doc, setDoc, deleteDoc, orderBy } from 'firebase/firestore';
 import { db } from './firebase';
 
-export type FormFieldType = "text" | "textarea" | "select" | "checkbox" | "image" | "title" | "subtitle" | "personalDetails" | "contentWithConsent" | "signature";
+export type FormFieldType = "text" | "textarea" | "select" | "checkbox" | "image" | "title" | "subtitle" | "personalDetails" | "contentWithConsent" | "signature" | "appointmentTreatmentsTable" | "dynamicGrid";
 
 export interface FormField {
     id: string;
@@ -15,6 +15,7 @@ export interface FormField {
     imageCount: number;
     required: boolean;
     showInSummary?: boolean;
+    gridMode?: 'matrix';
 }
 
 export interface TreatmentFormTemplate {
@@ -22,6 +23,7 @@ export interface TreatmentFormTemplate {
   name: string;
   fields: FormField[];
   serviceIds?: string[];
+  categoryIds?: string[];
   type: 'treatment' | 'summary';
 }
 

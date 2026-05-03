@@ -149,7 +149,7 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, categor
         name: '',
         fields: [],
         serviceIds: [],
-        categoryIds: [],
+        
         type: formType,
     };
     
@@ -161,7 +161,7 @@ const TreatmentFormBuilder = ({ onSave, onCancel, initialData, services, categor
             const categoryIds = initialData.categoryIds || [];
             setForm({ ...initialData, serviceIds, categoryIds, type: formType });
         } else {
-            setForm({ id: crypto.randomUUID(), name: '', fields: [], serviceIds: [], categoryIds: [], type: formType});
+            setForm({ id: crypto.randomUUID(), name: '', fields: [], serviceIds: [],  type: formType});
         }
     }, [initialData, formType]);
 
